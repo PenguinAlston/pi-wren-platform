@@ -1,0 +1,12 @@
+packages:
+  - apps/*
+  - services/*
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+
+# pnpm 11 默认在每次脚本运行前校验依赖状态并自动重装；
+# 沙箱/CI 环境中无交互 TTY 会导致失败，显式关闭该自检。
+verifyDepsBeforeRun: false

@@ -1,19 +1,12 @@
-export type AgentEventType =
-  | 'plan'
-  | 'tool_call'
-  | 'observation'
-  | 'answer';
+import type { AgentEvent, AgentEventType } from '@pi-wren/shared-types';
+import { randomUUID } from 'node:crypto';
 
-export interface RuntimeEvent {
-  type: AgentEventType;
-  payload: unknown;
-  createdAt: string;
-}
-
-export function createEvent(type: AgentEventType, payload: unknown): RuntimeEvent {
+export function createEvent(type: AgentEventType, label: string, detail?: string): AgentEvent {
   return {
+    id: randomUUID(),
     type,
-    payload,
-    createdAt: new Date().toISOString(),
+    label,
+    ...(detail !== undefined ? { detail } : {}),
+    timestamp: new Date().toISOString(),
   };
 }

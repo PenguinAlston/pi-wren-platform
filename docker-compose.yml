@@ -1,14 +1,27 @@
 services:
   postgres:
-    image: postgres:16
+    image: docker.1ms.run/bitnami/postgresql:latest
     environment:
-      POSTGRES_PASSWORD: demo
-      POSTGRES_USER: demo
-      POSTGRES_DB: piwren
+      # Bitnami PostgreSQL 环境变量（与应用默认值 demo/piwren 保持一致）
+      POSTGRESQL_USERNAME: demo
+      POSTGRESQL_PASSWORD: demo
+      POSTGRESQL_DATABASE: piwren
     ports:
       - '5432:5432'
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U demo -d piwren']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
-    image: redis:7
+    image: redis:7.4.4-alpine
     ports:
       - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10

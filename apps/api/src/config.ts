@@ -1,0 +1,33 @@
+import { z } from 'zod';
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  PORT: z.coerce.number().int().positive().default(8080),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  CORS_ORIGIN: z.string().default('http://localhost:3000'),
+
+  DB_HOST: z.string().default('localhost'),
+  DB_PORT: z.coerce.number().int().default(5432),
+  DB_NAME: z.string().default('piwren'),
+  DB_USER: z.string().default('demo'),
+  DB_PASSWORD: z.string().default('demo'),
+
+  LLM_PROVIDER: z.enum(['mock', 'openai', 'anthropic', 'ollama']).default('mock'),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_BASE_URL: z.string().optional(),
+  OPENAI_MODEL: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().optional(),
+  OLLAMA_BASE_URL: z.string().optional(),
+  OLLAMA_MODEL: z.string().optional(),
+
+  WREN_URL: z.string().optional(),
+  WREN_TOKEN: z.string().optional(),
+});
+
+export type ApiConfig = z.infer<typeof envSchema>;
+
+/** Validate and normalize environment configuration at startup. */
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
+  return envSchema.parse(env);
+}

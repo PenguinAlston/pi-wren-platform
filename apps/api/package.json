@@ -1,0 +1,33 @@
+{
+  "name": "@pi-wren/api",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup",
+    "start": "node dist/server.js",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pi-wren/agent-runtime": "workspace:*",
+    "@pi-wren/shared-types": "workspace:*",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "pino": "^9.6.0",
+    "pino-http": "^10.4.0",
+    "zod": "3.24.2",
+    "@pi-wren/agent-sdk": "workspace:*",
+    "@pi-wren/context-engine": "workspace:*",
+    "@pi-wren/data-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

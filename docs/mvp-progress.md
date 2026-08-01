@@ -1,26 +1,20 @@
-# MVP Progress
+# MVP 进展
 
-## Completed
+> 状态更新：2026-08-02。MVP 骨架已完成工程化重构并通过全链路验证。
+> 企业级演进清单见 [docs/enterprise-roadmap.md](enterprise-roadmap.md)。
 
-- Agent runtime abstraction
-- Planning layer
-- Execution loop
-- Event model
-- Memory abstraction
-- Tool registry
-- Wren context abstraction
-- Model provider abstraction
+## 已完成
 
-## Next
+- pnpm workspace 重构与统一工具链（ESLint / Prettier / Vitest / CI）
+- LLM Provider 抽象与实现：OpenAI、Anthropic、Ollama、离线 Mock
+- Wren 语义层：Wren AI 客户端 + demo SQL 生成 + 指标定义
+- PostgreSQL 数据引擎与种子数据
+- FinanceAgent 全链路：计划 → 语义 SQL → 查询 → 分析 → 摘要
+- Express API（配置校验、日志、健康检查、错误处理、优雅停机）
+- Next.js 聊天控制台（结论、执行轨迹、SQL、结果表）
+- 端到端验证：Web → API → Agent → PostgreSQL 已跑通
 
-- Connect real LLM providers
-- Add streaming API
-- Build chat frontend
-- Add persistent memory
-- Add authentication and RBAC
-- Add Wren production connector
-
-## Target Flow
+## 目标流程（已实现）
 
 ```
 User
@@ -29,13 +23,11 @@ Web Chat
  |
 Agent API
  |
-Pi Runtime Adapter
+Finance Agent (计划/工具/事件)
  |
-LLM
+Wren Context Engine → SQL
  |
-Tool Runner
+PostgreSQL 数据引擎
  |
-Wren Context Engine
- |
-Enterprise Data
+业务分析摘要
 ```
