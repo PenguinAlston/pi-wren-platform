@@ -133,3 +133,33 @@ describe('api', () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe('api sse stream', () => {
+  it('streams agent events and a final done frame', async () => {
+    const response = await fetch(`${baseUrl}/api/agent/finance/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '为什么利润下降？', sessionId: 'sse-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+
+    const text = await response.text();
+    expect(text).toContain('event: plan');
+    expect(text).toContain('event: tool_call');
+    expect(text).toContain('event: answer');
+    expect(text).toContain('event: done');
+    expect(text).toContain('"sessionId":"sse-1"');
+    expect(text).toContain('"label":"生成业务回答"');
+  });
+
+  it('rejects invalid stream requests', async () => {
+    const response = await fetch(`${baseUrl}/api/agent/finance/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(response.status).toBe(400);
+  });
+});

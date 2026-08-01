@@ -5,6 +5,7 @@ import type { Logger } from '../logger';
 
 const chatRequestSchema = z.object({
   message: z.string().trim().min(1, 'message is required').max(4000, 'message too long'),
+  sessionId: z.string().trim().min(1).max(128).optional(),
 });
 
 export function createChatHandler(deps: ApiDeps, logger: Logger) {
@@ -23,7 +24,9 @@ export function createChatHandler(deps: ApiDeps, logger: Logger) {
       return;
     }
 
-    const result = await spec.agent.answer(parsed.data.message);
+    const result = await spec.agent.answer(parsed.data.message, {
+      sessionId: parsed.data.sessionId,
+    });
 
     logger.info(
       {

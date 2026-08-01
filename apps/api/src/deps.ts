@@ -7,7 +7,6 @@ import {
   DataAnalysisAgent,
   LlmContextEngine,
   createFinanceTools,
-  InMemoryMemoryStore,
   financeDomain,
   insuranceDomain,
   type AgentDomainConfig,
@@ -21,6 +20,7 @@ import {
   type ContextEngine,
 } from '@pi-wren/context-engine';
 import { createDefaultSqlExecutor, type SqlExecutor } from '@pi-wren/data-engine';
+import { PiSessionStore } from '@pi-wren/pi-bridge';
 import type { MetricDefinition } from '@pi-wren/shared-types';
 import { join } from 'node:path';
 import type { ApiConfig } from './config';
@@ -85,7 +85,10 @@ function buildContext(
 /** Wire together the application dependencies from validated config. */
 export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiDeps> {
   const model = buildModel(config);
-  const memory: MemoryStore = new InMemoryMemoryStore();
+  // 方案 A：会话持久化接入开源 Pi（jsonl 落盘），多轮续聊/压缩基于 pi 会话仓库
+  const memory: MemoryStore = new PiSessionStore({
+    ...(config.SESSION_DIR ? { sessionsRoot: config.SESSION_DIR } : {}),
+  });
   const agents: AgentSpec[] = [];
 
   for (const { domain, semanticFile } of DOMAINS) {

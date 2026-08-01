@@ -4,6 +4,7 @@ import { pinoHttp } from 'pino-http';
 import type { ApiDeps } from './deps';
 import { createAgentsHandler } from './routes/agents';
 import { createChatHandler } from './routes/chat';
+import { createChatStreamHandler } from './routes/chat-stream';
 import { createHealthHandler } from './routes/health';
 import { createErrorHandler } from './middleware/error-handler';
 
@@ -23,6 +24,8 @@ export function createApp(deps: ApiDeps) {
   app.post('/api/agent/chat', createChatHandler(deps, deps.logger));
   // 按领域路由：/api/agent/:domain/chat
   app.post('/api/agent/:domain/chat', createChatHandler(deps, deps.logger));
+  // SSE 流式输出：执行事件实时推送（方案 A 事件协议）
+  app.post('/api/agent/:domain/chat/stream', createChatStreamHandler(deps, deps.logger));
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });

@@ -31,3 +31,6 @@ pnpm-debug.log*
 
 # Local pnpm store (created inside workspace by tooling)
 .pnpm-store/
+
+# Runtime data (pi session jsonl)
+data/

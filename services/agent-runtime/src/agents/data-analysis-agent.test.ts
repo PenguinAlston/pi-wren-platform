@@ -114,3 +114,35 @@ describe('DataAnalysisAgent', () => {
     expect(records[0]?.question).toBe('为什么利润下降？');
   });
 });
+
+describe('DataAnalysisAgent session & streaming', () => {
+  it('emits events via onEvent callback in order', async () => {
+    const { agent } = makeAgent();
+    const emitted: string[] = [];
+    await agent.answer('为什么利润下降？', {
+      onEvent: (event) => emitted.push(event.type),
+    });
+    expect(emitted).toEqual(['plan', 'observation', 'tool_call', 'tool_result', 'observation', 'answer']);
+  });
+
+  it('continues an existing session and injects history into the summary prompt', async () => {
+    const memory = new InMemoryMemoryStore();
+    const { agent } = makeAgent(financeDomain, undefined, memory);
+    await agent.answer('为什么利润下降？', { sessionId: 'sess-1' });
+
+    let historyInjected = false;
+    const model: ModelProvider = {
+      name: 'mock',
+      chat: async (messages: ChatMessage[]) => {
+        historyInjected = messages.some((m) => m.content.includes('历史对话') && m.content.includes('为什么利润下降'));
+        return { role: 'assistant', content: '续聊摘要' };
+      },
+    };
+    const { agent: agentWithModel } = makeAgent(financeDomain, model, memory);
+
+    const result = await agentWithModel.answer('那成本呢？', { sessionId: 'sess-1' });
+    expect(result.sessionId).toBe('sess-1');
+    expect(historyInjected).toBe(true);
+    expect(result.answer).toBe('续聊摘要');
+  });
+});

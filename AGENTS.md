@@ -6,9 +6,10 @@
 
 pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 workspace 各司其职：
 
-- `apps/api` — Express API：zod 配置校验、pino 日志、健康检查、`/api/agents`、`/api/agent/:domain/chat`（`src/`）
+- `apps/api` — Express API：zod 配置校验、pino 日志、健康检查、`/api/agents`、`/api/agent/:domain/chat`、`/api/agent/:domain/chat/stream`（SSE 流式，`src/routes/`）
 - `apps/web` — Next.js 聊天控制台：多 Agent 切换、执行轨迹、SQL、结果表（`app/chat/`）
-- `services/agent-runtime` — Agent 执行：计划、工具注册、事件、记忆、领域驱动的 `DataAnalysisAgent`（`src/agents/`）；LLM 动态 SQL 生成与安全校验（`src/context/`）
+- `services/agent-runtime` — Agent 执行：计划、工具注册、事件、记忆、领域驱动的 `DataAnalysisAgent`（`src/agents/`，支持 `sessionId` 续聊 + `onEvent` 流式回调）；LLM 动态 SQL 生成与安全校验（`src/context/`）
+- `services/pi-bridge` — 开源 Pi 会话层（方案 A）：基于 `@earendil-works/pi-agent-core` 的 jsonl 多轮会话持久化（`PiSessionStore`）、压缩决策、SSE 事件协议（`src/`）
 - `services/context-engine` — 语义层：Wren AI 客户端（`src/wren/`）、MDL 式配置驱动引擎（`src/mdl/`）
 - `services/data-engine` — PostgreSQL 连接池与 SQL 执行器（`src/`）
 - `packages/agent-sdk` — LLM Provider（OpenAI 兼容 / Anthropic / Ollama / Mock）（`src/providers/`）
@@ -24,9 +25,9 @@ pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 works
 
 - `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `pnpm-workspace.yaml` 的 `allowBuilds`）
 - `pnpm dev` — 并行启动 API（:8080）与 Web（:3000）。**不要在 dev 运行时执行 `pnpm build`**（两者共用 `.next` 缓存会冲突）
-- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（46 个用例）
+- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（55 个用例；API 集成测试需可监听本地端口）
 - `docker compose up -d` — 启动 PostgreSQL/Redis（使用本机镜像，见 `docker-compose.yml`）
-- 配置：在仓库根创建 `.env`（参考 `.env.example`），API 通过 dotenv 自动加载；`LLM_PROVIDER`（`mock|openai|anthropic|ollama`）切换离线规则模式与 LLM 动态 SQL 模式
+- 配置：在仓库根创建 `.env`（参考 `.env.example`），API 通过 dotenv 自动加载；`LLM_PROVIDER`（`mock|openai|anthropic|ollama`）切换离线规则模式与 LLM 动态 SQL 模式；`SESSION_DIR` 可覆盖会话存储目录（默认 `data/sessions`，已 gitignore）
 
 ## 编码风格与命名约定
 

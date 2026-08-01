@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsup",
-    "start": "node dist/server.js",
+    "start": "node dist/server.cjs",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -22,7 +22,8 @@
     "@pi-wren/agent-sdk": "workspace:*",
     "@pi-wren/context-engine": "workspace:*",
     "@pi-wren/data-engine": "workspace:*",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "@pi-wren/pi-bridge": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

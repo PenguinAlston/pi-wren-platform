@@ -34,6 +34,9 @@ const envSchema = z.object({
   WREN_URL: z.string().optional(),
   WREN_TOKEN: z.string().optional(),
   SEMANTIC_DIR: z.string().optional(),
+
+  // 会话持久化目录（开源 Pi jsonl 存储），默认 <cwd>/data/sessions
+  SESSION_DIR: z.string().optional(),
 });
 
 export type ApiConfig = z.infer<typeof envSchema>;

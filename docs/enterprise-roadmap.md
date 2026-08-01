@@ -24,6 +24,8 @@
 - [x] DataAnalysisAgent 通用流水线：计划 → SQL → 查询 → 分析 → 摘要（领域配置驱动，财务/保险双 Agent）
 - [x] 结构化执行事件（plan/tool_call/tool_result/observation/answer/error）与前端轨迹
 - [x] 内存会话记忆抽象（`MemoryStore` 接口）
+- [x] 开源 Pi 会话层接入（方案 A）：`services/pi-bridge`，基于 pi jsonl 会话仓库持久化多轮会话（`data/sessions/`），Agent 支持 `sessionId` 续聊 + 历史注入
+- [x] SSE 流式输出（执行事件实时推送）：`POST /api/agent/:domain/chat/stream`，前端实时轨迹（LLM token 级流式待做）
 - [x] 保险核心业务表结构（依据需求文档：契约/保全/理赔/客户/字典等 22 张生产级表 + 种子数据）
 - [x] Express API：健康检查、请求校验、pino 结构化日志、统一错误处理、优雅停机、超时保护
 - [x] Next.js 聊天控制台：多 Agent 切换、结论、轨迹、SQL、结果表、120s 请求超时
@@ -35,9 +37,9 @@
 ### P1 — 上线前必做
 - [ ] 身份认证与授权（API key / JWT / RBAC），目前 chat 路由完全开放
 - [ ] SQL 执行硬约束（数据库层只读事务、行数上限、超时）——生成层已有校验，执行层待加固
-- [ ] 会话记忆持久化（Redis/Postgres），当前为进程内内存
+- [x] 会话记忆持久化（基于开源 Pi jsonl 落盘，`data/sessions/`；Redis/多实例共享可后续替换）
 - [ ] 审计日志落库（`sys_operation_log` 表已建，未接入业务）
-- [ ] LLM 流式输出（SSE），当前为一次性 JSON 响应
+- [~] LLM 流式输出：执行事件 SSE 已完成（`/chat/stream`）；LLM 摘要 token 级流式待做
 - [ ] API 与 Web 的 Dockerfile + compose 编排（当前只有依赖服务）
 - [ ] 错误追踪（Sentry 或 OpenTelemetry 导出）
 
@@ -54,7 +56,7 @@
 - [ ] 指标定义管理界面（语义模型 CRUD）
 - [ ] 多数据源连接器（BigQuery、Snowflake 等）
 - [ ] 多租户与细粒度数据权限（行级/列级）
-- [ ] 开源 Pi 会话层接入（SSE 流式 + 会话持久化，Spike 已通过，见 `docs/pi-integration-assessment.md`）
+- [x] 开源 Pi 会话层接入（SSE 流式 + 会话持久化，已落地，见 `docs/pi-integration-assessment.md`）
 
 ## 架构决策记录
 

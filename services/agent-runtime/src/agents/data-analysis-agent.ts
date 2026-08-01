@@ -4,7 +4,7 @@ import type { SqlExecutor } from '@pi-wren/data-engine';
 import type { ModelProvider } from '@pi-wren/agent-sdk';
 import { randomUUID } from 'node:crypto';
 import { createEvent } from '../events';
-import type { MemoryStore } from '../memory';
+import type { ConversationRecord, MemoryStore } from '../memory';
 import { AgentPlanner } from '../planner';
 import { analyzeQueryResult } from '../tools/result-analysis-tool';
 import type { AgentToolContext, ToolRegistry } from '../tools/registry';
@@ -20,6 +20,16 @@ export interface DataAnalysisAgentDeps {
   memory?: MemoryStore;
 }
 
+export interface AnswerOptions {
+  /** 已有会话 ID：续聊时传入，历史记录将注入摘要上下文。 */
+  sessionId?: string;
+  /** 事件回调：每个执行事件产出时调用（用于 SSE 流式输出）。 */
+  onEvent?: (event: AgentEvent) => void;
+}
+
+/** 注入摘要上下文的最近对话轮数。 */
+const HISTORY_INJECTION_TURNS = 3;
+
 /**
  * 通用数据分析 Agent：问题 → 语义层生成 SQL → 查询 → 分析 → (可选)LLM 摘要。
  * 与行业无关：领域差异全部由 domain 配置与注入的语义层/工具决定。
@@ -33,9 +43,9 @@ export class DataAnalysisAgent {
     return this.deps.domain;
   }
 
-  async answer(question: string): Promise<AgentRunResult> {
+  async answer(question: string, options: AnswerOptions = {}): Promise<AgentRunResult> {
     const startedAt = Date.now();
-    const sessionId = randomUUID();
+    const sessionId = options.sessionId ?? randomUUID();
     const events: AgentEvent[] = [];
     const trace: string[] = [];
     const toolCalls: AgentToolCall[] = [];
@@ -45,6 +55,7 @@ export class DataAnalysisAgent {
       const event = createEvent(type, label, detail);
       events.push(event);
       trace.push(label);
+      options.onEvent?.(event);
       return event;
     };
 
@@ -98,11 +109,12 @@ export class DataAnalysisAgent {
       if (this.deps.model) {
         const summaryStart = Date.now();
         try {
-          const summary = await this.summarize(question, analysis);
+          const history = await this.loadHistory(sessionId, question);
+          const summary = await this.summarize(question, analysis, history);
           answer = summary.content;
           toolCalls.push({
             name: 'llm_summarize',
-            input: { question },
+            input: { question, historyTurns: history.length },
             output: { chars: summary.content.length },
             durationMs: Date.now() - summaryStart,
             ok: true,
@@ -141,9 +153,23 @@ export class DataAnalysisAgent {
     }
   }
 
+  /** 读取会话历史（仅当存储支持 getHistory 时），取最近 N 轮。 */
+  private async loadHistory(
+    sessionId: string,
+    currentQuestion: string,
+  ): Promise<ConversationRecord[]> {
+    if (!this.deps.memory?.getHistory) {
+      return [];
+    }
+    const history = await this.deps.memory.getHistory(sessionId);
+    // 排除与当前问题相同的记录（防重复注入），仅保留最近几轮
+    return history.filter((r) => r.question !== currentQuestion).slice(-HISTORY_INJECTION_TURNS);
+  }
+
   private async summarize(
     question: string,
     analysis: { summary: string; observations: string[]; table: Record<string, unknown>[] },
+    history: ConversationRecord[] = [],
   ): Promise<ChatMessage> {
     if (!this.deps.model) {
       throw new Error('No model provider configured');
@@ -153,10 +179,11 @@ export class DataAnalysisAgent {
       {
         role: 'user',
         content: [
+          ...(history.length > 0 ? this.formatHistory(history) : []),
           `问题：${question}`,
           `数据：\n${JSON.stringify(analysis.table, null, 2)}`,
           `初步观察：\n${analysis.observations.join('\n')}`,
-          '硬性要求：日期与数值必须逐字照抄上方数据，禁止改写、取整或推算；数据中不存在的字段如实说明"未包含"。',
+          '硬性要求：日期与数值必须逐字照抄上方数据，禁止改写、取整或推算；数据中不存在的字段如实说明"未包含"；历史对话仅供上下文参考，不得替代本次查询结果。',
         ].join('\n\n'),
       },
     ];
@@ -165,6 +192,15 @@ export class DataAnalysisAgent {
       maxTokens: 600,
       signal: AbortSignal.timeout(45_000),
     });
+  }
+
+  private formatHistory(history: ConversationRecord[]): string[] {
+    const lines: string[] = ['以下为本次会话的历史对话（仅供参考）：'];
+    for (const record of history) {
+      lines.push(`用户：${record.question}`);
+      lines.push(`助手：${record.answer}`);
+    }
+    return lines;
   }
 
   private async saveMemory(

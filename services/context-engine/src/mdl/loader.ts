@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import type { SemanticConfig, SemanticIntent, SemanticMetric, SemanticModel } from './types';
@@ -106,14 +106,25 @@ export function loadSemanticConfig(path: string): SemanticConfig {
 
 /** Resolve the semantic config file relative to this module, with cwd fallback. */
 export function resolveSemanticFile(filename: string): string {
-  const candidates = [
-    // dev（源码位置 services/context-engine/src/mdl/ -> 仓库根/semantic）
-    fileURLToPath(new URL(`../../../../semantic/${filename}`, import.meta.url)),
-    // tsup 打包后（apps/api/dist/server.js -> 仓库根/semantic）
-    fileURLToPath(new URL(`../../semantic/${filename}`, import.meta.url)),
-    // 以仓库根为 cwd 运行时
-    join(process.cwd(), 'semantic', filename),
-  ];
+  const candidates: string[] = [];
+  // dev（源码位置 services/context-engine/src/mdl/ -> 仓库根/semantic）
+  // 打包/CJS 环境下 import.meta.url 可能不可用，需要容错
+  try {
+    candidates.push(fileURLToPath(new URL(`../../../../semantic/${filename}`, import.meta.url)));
+  } catch {
+    // ignore: no import.meta.url (bundled CJS)
+  }
+  try {
+    candidates.push(fileURLToPath(new URL(`../../semantic/${filename}`, import.meta.url)));
+  } catch {
+    // ignore: no import.meta.url (bundled CJS)
+  }
+  // 从 cwd 逐级向上查找仓库根 semantic/，兼容打包后从任意目录运行
+  let dir = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    candidates.push(join(dir, 'semantic', filename));
+    dir = dirname(dir);
+  }
   for (const candidate of candidates) {
     if (existsSync(candidate)) {
       return candidate;

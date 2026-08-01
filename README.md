@@ -90,7 +90,8 @@ docs/              架构说明、进展与路线图
 
 - `GET /api/agents` — 已注册 Agent 列表（id/标签/描述/指标）
 - `POST /api/agent/chat` — 默认财务分析 Agent
-- `POST /api/agent/:domain/chat` — 按领域调用（finance / insurance）
+- `POST /api/agent/:domain/chat` — 按领域调用（finance / insurance），支持 `sessionId` 续聊
+- `POST /api/agent/:domain/chat/stream` — SSE 流式版：执行事件实时推送（前端已接入）
 - `GET /health` — 健康检查
 
 ## 测试

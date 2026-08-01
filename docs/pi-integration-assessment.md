@@ -3,6 +3,16 @@
 > 评估日期：2026-08 · 目标：判断能否将 MIT 开源 Agent 工具集
 > [`earendil-works/pi`](https://github.com/earendil-works/pi)（pi-ai / pi-agent-core）嵌入本平台。
 
+## 状态：方案 A 已落地（2026-08）
+
+Spike 通过后已完成**会话层接入**（提交见 Git 历史）：
+
+- 新增 `services/pi-bridge`：`PiSessionStore`（pi `JsonlSessionRepo` 持久化多轮会话，`data/sessions/`）、压缩决策辅助、SSE 事件协议
+- `DataAnalysisAgent.answer(question, { sessionId, onEvent })`：续聊时注入最近 3 轮历史，执行事件实时回调
+- API 新增 `POST /api/agent/:domain/chat/stream`（SSE），前端实时渲染执行轨迹并保持同一会话续聊
+- 生产构建修复：tsup 由 ESM 改 CJS（原生 CJS 依赖 pg/yaml 在 ESM bundle 运行时报错）；`resolveSemanticFile` 增加 cwd 向上查找（兼容打包后运行）
+- 风险边界保持不变：问答仍走确定性流水线，SQL 校验/降级/防幻觉未改动
+
 ## 结论（TL;DR）
 
 **技术可行，Spike 已跑通。** 但建议**不要用 Pi 替换现有确定性 SQL 流水线**，

@@ -4,7 +4,9 @@ packages:
   - packages/*
 
 allowBuilds:
+  '@google/genai': false
   esbuild: true
+  protobufjs: false
   sharp: true
 
 # pnpm 11 默认在每次脚本运行前校验依赖状态并自动重装；
