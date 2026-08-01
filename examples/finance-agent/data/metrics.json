@@ -1,0 +1,14 @@
+{
+  "profit": {
+    "definition": "Revenue minus cost and operating expenses",
+    "unit": "USD"
+  },
+  "revenue": {
+    "definition": "Recognized business revenue",
+    "unit": "USD"
+  },
+  "cost": {
+    "definition": "Operational costs",
+    "unit": "USD"
+  }
+}
