@@ -1,47 +1,47 @@
-# Repository Guidelines
+# 仓库指南
 
-Contributor guide for `pi-wren-platform`: an enterprise agent platform that answers natural-language business questions with LLM-generated SQL against real databases (Pi Agent Runtime + Wren-style context layer).
+`pi-wren-platform` 贡献者指南：一个用 LLM 生成 SQL、对真实数据库进行自然语言业务问答的企业级 Agent 平台（融合 Pi Agent Runtime 执行层与 Wren 风格语义上下文层）。
 
-## Project Structure & Module Organization
+## 项目结构与模块划分
 
-pnpm-workspaces monorepo (`pnpm-workspace.yaml`); all code is TypeScript. Each workspace owns a single concern:
+pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 workspace 各司其职：
 
-- `apps/api` — Express API: zod config, pino logging, health, `/api/agents`, `/api/agent/:domain/chat` (`src/`)
-- `apps/web` — Next.js chat console: multi-agent switcher, trace, SQL, result table (`app/chat/`)
-- `services/agent-runtime` — agent execution: planner, tool registry, events, memory, domain-driven `DataAnalysisAgent` (`src/agents/`), LLM SQL generation + safety validation (`src/context/`)
-- `services/context-engine` — semantic layer: Wren AI client (`src/wren/`), MDL-style config engine (`src/mdl/`)
-- `services/data-engine` — PostgreSQL pool and SQL executor (`src/`)
-- `packages/agent-sdk` — LLM providers (OpenAI-compatible/Anthropic/Ollama/Mock) (`src/providers/`)
-- `packages/shared-types` — cross-boundary contracts (`src/index.ts`)
-- `semantic/` — MDL-style YAML configs (`finance.mdl.yml`, `insurance.mdl.yml`): models/intents/metrics/knowledge
-- `infra/postgres` — schema + seed (`init.sql`, `insurance_schema.sql`, `insurance_seed.sql`); `docs` — architecture and roadmap
+- `apps/api` — Express API：zod 配置校验、pino 日志、健康检查、`/api/agents`、`/api/agent/:domain/chat`（`src/`）
+- `apps/web` — Next.js 聊天控制台：多 Agent 切换、执行轨迹、SQL、结果表（`app/chat/`）
+- `services/agent-runtime` — Agent 执行：计划、工具注册、事件、记忆、领域驱动的 `DataAnalysisAgent`（`src/agents/`）；LLM 动态 SQL 生成与安全校验（`src/context/`）
+- `services/context-engine` — 语义层：Wren AI 客户端（`src/wren/`）、MDL 式配置驱动引擎（`src/mdl/`）
+- `services/data-engine` — PostgreSQL 连接池与 SQL 执行器（`src/`）
+- `packages/agent-sdk` — LLM Provider（OpenAI 兼容 / Anthropic / Ollama / Mock）（`src/providers/`）
+- `packages/shared-types` — 跨服务共享类型（`src/index.ts`）
+- `semantic/` — MDL 式 YAML 语义配置（`finance.mdl.yml`、`insurance.mdl.yml`）：模型/意图/指标/知识
+- `infra/postgres` — 建表与种子数据（`init.sql`、`insurance_schema.sql`、`insurance_seed.sql`）；`docs` — 架构与路线图
 
-How the pieces fit: a new agent = a domain config (`src/agents/domain.ts`) + a semantic YAML; the pipeline code is unchanged. All business dependencies are constructor-injected so tests substitute fakes.
+各部分如何协作：**新增一个 Agent = 新增一段领域配置（`src/agents/domain.ts`）+ 一份语义 YAML，流水线代码零改动**。所有业务依赖均通过构造函数注入，便于测试替换替身。
 
-## Build, Test, and Development Commands
+## 构建、测试与开发命令
 
-Run from the repository root:
+在仓库根目录执行：
 
-- `pnpm install` — install dependencies (`--frozen-lockfile` in CI; pnpm 11 uses `allowBuilds` in `pnpm-workspace.yaml`)
-- `pnpm dev` — start API (:8080) and Web (:3000). Do not run `pnpm build` while dev is running (shared `.next` cache)
-- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — build, lint, type-check, and run Vitest (46 tests) across workspaces
-- `docker compose up -d` — PostgreSQL/Redis using local images (see `docker-compose.yml`)
-- Configuration: create `.env` at the repo root (see `.env.example`); the API auto-loads it via dotenv. `LLM_PROVIDER` (`mock|openai|anthropic|ollama`) switches between offline rule-based mode and LLM-powered SQL generation.
+- `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `pnpm-workspace.yaml` 的 `allowBuilds`）
+- `pnpm dev` — 并行启动 API（:8080）与 Web（:3000）。**不要在 dev 运行时执行 `pnpm build`**（两者共用 `.next` 缓存会冲突）
+- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（46 个用例）
+- `docker compose up -d` — 启动 PostgreSQL/Redis（使用本机镜像，见 `docker-compose.yml`）
+- 配置：在仓库根创建 `.env`（参考 `.env.example`），API 通过 dotenv 自动加载；`LLM_PROVIDER`（`mock|openai|anthropic|ollama`）切换离线规则模式与 LLM 动态 SQL 模式
 
-## Coding Style & Naming Conventions
+## 编码风格与命名约定
 
-- TypeScript, 2-space indentation, semicolons, single quotes (Prettier enforced).
-- Strict mode, `verbatimModuleSyntax` (`import type` for type-only imports), `noUncheckedIndexedAccess`.
-- `interface` for shapes, small classes for services, kebab-case filenames (`sql-runner.ts`), camelCase functions/variables.
-- Validate environment configuration with zod in `apps/api/src/config.ts`; semantic YAML is validated by `src/mdl/loader.ts`.
+- TypeScript，2 空格缩进，分号，单引号（Prettier 强制）
+- strict 模式、`verbatimModuleSyntax`（类型导入用 `import type`）、`noUncheckedIndexedAccess`
+- 形状用 `interface`，服务用小类；文件名 kebab-case（`sql-runner.ts`），函数/变量 camelCase
+- 环境配置用 zod 校验（`apps/api/src/config.ts`）；语义 YAML 由 `src/mdl/loader.ts` 校验
 
-## Testing Guidelines
+## 测试指南
 
-- Vitest; tests colocated as `*.test.ts` next to the code they cover.
-- Name by behavior: `describe('LlmContextEngine')` with `it('falls back when the LLM returns a dangerous statement')`.
-- Cover provider clients (mock `fetch`), SQL validation, intent matching, the agent pipeline (inject fakes), and the API (integration over an ephemeral port).
+- Vitest；测试与源码同目录，命名 `*.test.ts`
+- 按行为命名：`describe('LlmContextEngine')` + `it('falls back when the LLM returns a dangerous statement')`
+- 覆盖：Provider 客户端（mock `fetch`）、SQL 校验、意图匹配、Agent 流水线（注入替身）、API（临时端口集成测试）
 
-## Commit & Pull Request Guidelines
+## 提交与 PR 指南
 
-- Conventional Commits, lowercase and imperative: `feat: add llm-powered sql generation`, `fix: raise proxy timeout for slow llm`.
-- One logical change per commit; PRs against `main` link an issue, summarize what/why, list manual verification, and include screenshots for UI changes.
+- Conventional Commits，小写祈使句：`feat: add llm-powered sql generation`、`fix: raise proxy timeout for slow llm`
+- 每次提交一个逻辑变更；PR 面向 `main`，关联 issue、说明"改了什么/为什么"、列出手工验证步骤，UI 变更附截图
