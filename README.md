@@ -2,22 +2,56 @@
 
 Enterprise Agent Platform powered by Pi Agent Runtime + Wren Context Engine.
 
+## Demo Quick Start
+
+```bash
+docker compose up
+```
+
+Open:
+
+```
+http://localhost:3000/chat
+```
+
+Try:
+
+```
+为什么利润下降？
+```
+
+## Demo Flow
+
+```
+User
+ |
+Finance Agent
+ |
+Agent Runtime
+ |
+Wren Context
+ |
+Business Metrics
+ |
+Analysis Result
+```
+
 ## Vision
 
-`pi-wren-platform` is an open-source Enterprise Agent Operating System that combines:
+`pi-wren-platform` combines:
 
-- **Pi Runtime** - Agent execution, planning, tool calling and workflow orchestration
-- **Wren Context Engine** - Enterprise semantic context, business knowledge and data intelligence
-- **Enterprise Control Plane** - Security, governance, memory and observability
+- Pi Runtime - Agent execution, planning, tool calling and workflow orchestration
+- Wren Context Engine - Enterprise semantic context and business intelligence
+- Enterprise Control Plane - Security, governance, memory and observability
 
 ## Architecture
 
 ```
 User
  |
-Web / IDE / Chat
+Web Chat
  |
-Enterprise Agent Gateway
+Agent Gateway
  |
 Pi Agent Runtime
  |
@@ -32,57 +66,23 @@ Layer          Systems
 
 ## Roadmap
 
-### v0.1 Agent Foundation
+### v0.1 Demo
 
-- [x] Repository initialized
-- [ ] Agent runtime adapter
-- [ ] Streaming chat API
-- [ ] Tool execution framework
-- [ ] Session management
+- [x] Agent runtime foundation
+- [x] Finance agent demo
+- [x] Wren context simulation
+- [x] Chat workflow foundation
 
 ### v0.2 Enterprise Context
 
-- [ ] Wren integration
-- [ ] Semantic model access
-- [ ] Business knowledge API
-- [ ] SQL generation workflow
+- Wren production integration
+- Semantic model access
+- SQL generation workflow
+- Database connectors
 
 ### v0.3 Enterprise Platform
 
-- [ ] Memory service
-- [ ] Workflow engine
-- [ ] RBAC
-- [ ] Audit logging
-- [ ] Approval workflows
-
-## Repository Structure
-
-```
-apps/
-  web/                  # Enterprise frontend
-  api/                  # Backend gateway
-
-services/
-  agent-runtime/        # Pi integration
-  context-engine/       # Wren integration
-  memory-service/
-  workflow-engine/
-  policy-engine/
-
-packages/
-  agent-sdk/
-  tool-sdk/
-  shared-types/
-
-infra/
-  docker/
-  kubernetes/
-
-docs/
-  architecture.md
-  roadmap.md
-```
-
-## License
-
-Apache-2.0
+- Memory service
+- Workflow engine
+- RBAC
+- Audit logging
