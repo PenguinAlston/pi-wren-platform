@@ -3,21 +3,57 @@ import {
   type ModelProvider,
   type ProviderKind,
 } from '@pi-wren/agent-sdk';
-import { FinanceAgent, createFinanceTools, InMemoryMemoryStore } from '@pi-wren/agent-runtime';
-import { DemoContextEngine, WrenContextEngine, type ContextEngine } from '@pi-wren/context-engine';
-import { createDefaultSqlExecutor } from '@pi-wren/data-engine';
+import {
+  DataAnalysisAgent,
+  createFinanceTools,
+  InMemoryMemoryStore,
+  financeDomain,
+  insuranceDomain,
+  type AgentDomainConfig,
+  type MemoryStore,
+} from '@pi-wren/agent-runtime';
+import {
+  ConfigDrivenContextEngine,
+  WrenContextEngine,
+  loadSemanticConfig,
+  resolveSemanticFile,
+  type ContextEngine,
+} from '@pi-wren/context-engine';
+import { createDefaultSqlExecutor, type SqlExecutor } from '@pi-wren/data-engine';
 import type { MetricDefinition } from '@pi-wren/shared-types';
+import { join } from 'node:path';
 import type { ApiConfig } from './config';
 import type { Logger } from './logger';
+
+export interface AgentSpec {
+  id: string;
+  label: string;
+  description: string;
+  agent: DataAnalysisAgent;
+  metrics: MetricDefinition[];
+}
 
 export interface ApiDeps {
   config: ApiConfig;
   logger: Logger;
-  agent: FinanceAgent;
-  metrics: MetricDefinition[];
+  agents: AgentSpec[];
 }
 
-function buildModel(config: ApiConfig): ModelProvider {
+interface DomainRegistration {
+  domain: AgentDomainConfig;
+  semanticFile: string;
+}
+
+const DOMAINS: DomainRegistration[] = [
+  { domain: financeDomain, semanticFile: 'finance.mdl.yml' },
+  { domain: insuranceDomain, semanticFile: 'insurance.mdl.yml' },
+];
+
+function buildModel(config: ApiConfig): ModelProvider | undefined {
+  if (config.LLM_PROVIDER === 'mock') {
+    // mock 提供器仅用于离线演示，此时不注入 LLM，使用确定性的业务分析摘要作为回答
+    return undefined;
+  }
   return createModelProvider({
     kind: config.LLM_PROVIDER as ProviderKind,
     apiKey: config.OPENAI_API_KEY ?? config.ANTHROPIC_API_KEY,
@@ -26,29 +62,44 @@ function buildModel(config: ApiConfig): ModelProvider {
   });
 }
 
-function buildContext(config: ApiConfig): ContextEngine {
+function buildContext(config: ApiConfig, semanticFile: string): ContextEngine {
   if (config.WREN_URL) {
     return new WrenContextEngine({ endpoint: config.WREN_URL, token: config.WREN_TOKEN });
   }
-  return new DemoContextEngine();
+  const path = config.SEMANTIC_DIR
+    ? join(config.SEMANTIC_DIR, semanticFile)
+    : resolveSemanticFile(semanticFile);
+  return new ConfigDrivenContextEngine(loadSemanticConfig(path));
 }
 
 /** Wire together the application dependencies from validated config. */
 export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiDeps> {
-  const context = buildContext(config);
-  const sql = createDefaultSqlExecutor();
-  const tools = createFinanceTools(context, sql);
-  const memory = new InMemoryMemoryStore();
-  // mock 提供器仅用于离线演示，此时不注入 LLM，使用确定性的业务分析摘要作为回答
-  const model = config.LLM_PROVIDER === 'mock' ? undefined : buildModel(config);
-  const agent = new FinanceAgent({ context, sql, tools, model, memory });
+  const model = buildModel(config);
+  const memory: MemoryStore = new InMemoryMemoryStore();
+  const agents: AgentSpec[] = [];
 
-  logger.info({ provider: model?.name ?? 'none', wren: Boolean(config.WREN_URL) }, 'dependencies initialized');
+  for (const { domain, semanticFile } of DOMAINS) {
+    const context = buildContext(config, semanticFile);
+    const sql: SqlExecutor = createDefaultSqlExecutor();
+    const tools = createFinanceTools(context, sql);
+    const agent = new DataAnalysisAgent({ domain, context, sql, tools, model, memory });
+    agents.push({
+      id: domain.id,
+      label: domain.label,
+      description: domain.description,
+      agent,
+      metrics: await context.listMetrics(),
+    });
+  }
 
-  return {
-    config,
-    logger,
-    agent,
-    metrics: await context.listMetrics(),
-  };
+  logger.info(
+    {
+      provider: model?.name ?? 'none',
+      wren: Boolean(config.WREN_URL),
+      domains: agents.map((a) => a.id),
+    },
+    'dependencies initialized',
+  );
+
+  return { config, logger, agents };
 }

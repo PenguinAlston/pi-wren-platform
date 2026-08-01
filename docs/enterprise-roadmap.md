@@ -14,9 +14,9 @@
 
 ### 运行时能力
 - [x] 真实 LLM Provider：OpenAI 兼容、Anthropic、Ollama + 离线 Mock
-- [x] Wren AI HTTP 客户端（语义层 SQL 生成）+ demo 语义层（无外部依赖可跑）
+- [x] Wren AI HTTP 客户端（语义层 SQL 生成）+ MDL 式配置驱动语义引擎（YAML 建模，零外部依赖）
 - [x] PostgreSQL 数据引擎（连接池、SQL 执行、错误包裹）
-- [x] FinanceAgent 全链路：计划 → SQL → 查询 → 分析 → 摘要（依赖注入，可测试）
+- [x] DataAnalysisAgent 通用流水线：计划 → SQL → 查询 → 分析 → 摘要（领域配置驱动，已落地财务/保险双 Agent）
 - [x] 结构化执行事件（plan/tool_call/tool_result/observation/answer/error）与轨迹
 - [x] 内存会话记忆抽象（`MemoryStore` 接口）
 - [x] Express API：健康检查、请求校验、pino 结构化日志、统一错误处理、优雅停机
@@ -41,7 +41,7 @@
 - [ ] 缓存层（Redis 缓存指标定义与 SQL 生成结果）
 
 ### P3 — 平台化
-- [ ] 通用 Agent 运行时（当前只有 FinanceAgent 一条流水线）
+- [ ] 工作流引擎（多步编排、审批流）与 Agent 注册/发现中心（当前为配置文件注册）
 - [ ] 工作流引擎（多步编排、审批流）
 - [ ] 审计日志（谁在什么时间问了什么问题、执行了什么 SQL）
 - [ ] 指标定义管理界面（Wren 语义模型 CRUD）

@@ -8,8 +8,11 @@ import type { MemoryStore } from '../memory';
 import { AgentPlanner } from '../planner';
 import { analyzeQueryResult } from '../tools/result-analysis-tool';
 import type { AgentToolContext, ToolRegistry } from '../tools/registry';
+import type { AgentDomainConfig } from './domain';
 
-export interface FinanceAgentDeps {
+export interface DataAnalysisAgentDeps {
+  /** 领域配置：id/标签/系统提示词 */
+  domain: AgentDomainConfig;
   context: ContextEngine;
   sql: SqlExecutor;
   tools: ToolRegistry;
@@ -17,18 +20,18 @@ export interface FinanceAgentDeps {
   memory?: MemoryStore;
 }
 
-const SYSTEM_PROMPT =
-  '你是一名严谨的企业财务分析师。基于给定的查询结果，用提问相同的语言给出简洁的执行摘要：' +
-  '先说明总体结论，再列出关键数据点与变化，最后给出 1-2 条建议。不要编造数据。';
-
 /**
- * Finance analysis agent: question -> semantic SQL -> query -> analysis -> summary.
- * All dependencies are injected so tests can substitute fakes.
+ * 通用数据分析 Agent：问题 → 语义层生成 SQL → 查询 → 分析 → (可选)LLM 摘要。
+ * 与行业无关：领域差异全部由 domain 配置与注入的语义层/工具决定。
  */
-export class FinanceAgent {
+export class DataAnalysisAgent {
   private readonly planner = new AgentPlanner();
 
-  constructor(private readonly deps: FinanceAgentDeps) {}
+  constructor(private readonly deps: DataAnalysisAgentDeps) {}
+
+  get domain(): AgentDomainConfig {
+    return this.deps.domain;
+  }
 
   async answer(question: string): Promise<AgentRunResult> {
     const startedAt = Date.now();
@@ -48,11 +51,9 @@ export class FinanceAgent {
     try {
       emit('plan', '理解业务问题', question);
 
-      // 1. Plan
       const plan = this.planner.createPlan(question);
       emit('observation', '生成执行计划', plan.map((s) => `${s.action}: ${s.description}`).join(' → '));
 
-      // 2. Generate SQL through the semantic layer
       const sqlStart = Date.now();
       const sqlResult = (await this.deps.tools.execute(
         'wren_generate_sql',
@@ -69,7 +70,6 @@ export class FinanceAgent {
       });
       emit('tool_call', '通过语义层生成 SQL', sql);
 
-      // 3. Execute the query
       const queryStart = Date.now();
       const result = (await this.deps.tools.execute('database_query', sql, context)) as {
         rows: Record<string, unknown>[];
@@ -84,7 +84,6 @@ export class FinanceAgent {
       });
       emit('tool_result', `查询执行完成，返回 ${result.rows.length} 行`);
 
-      // 4. Analyze results (deterministic fallback)
       const analysis = analyzeQueryResult(result.rows, question);
       toolCalls.push({
         name: 'result_analysis',
@@ -95,7 +94,6 @@ export class FinanceAgent {
       });
       emit('observation', '分析查询结果', analysis.summary);
 
-      // 5. Summarize with the LLM when available
       let answer = analysis.summary;
       if (this.deps.model) {
         const summaryStart = Date.now();
@@ -151,7 +149,7 @@ export class FinanceAgent {
       throw new Error('No model provider configured');
     }
     const messages: ChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: this.deps.domain.systemPrompt },
       {
         role: 'user',
         content: [

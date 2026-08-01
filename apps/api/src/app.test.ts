@@ -3,19 +3,22 @@ import type { Server } from 'node:http';
 import { pino } from 'pino';
 import type { ContextEngine } from '@pi-wren/context-engine';
 import type { SqlExecutor } from '@pi-wren/data-engine';
-import { FinanceAgent, createFinanceTools } from '@pi-wren/agent-runtime';
+import { DataAnalysisAgent, createFinanceTools, financeDomain, insuranceDomain } from '@pi-wren/agent-runtime';
 import { createApp } from './app';
 import { loadConfig } from './config';
 import type { ApiConfig } from './config';
+import type { AgentSpec, ApiDeps } from './deps';
 
 const config: ApiConfig = loadConfig({ NODE_ENV: 'test', LOG_LEVEL: 'silent' });
 
-const context: ContextEngine = {
-  generateSQL: async () => 'SELECT quarter, profit FROM finance_fact ORDER BY quarter;',
-  searchKnowledge: async () => [],
-  getMetric: async (name) => ({ name, definition: 'demo' }),
-  listMetrics: async () => [],
-};
+function buildContext(prefix: string): ContextEngine {
+  return {
+    generateSQL: async () => `SELECT * FROM ${prefix};`,
+    searchKnowledge: async () => [],
+    getMetric: async (name) => ({ name, definition: 'demo' }),
+    listMetrics: async () => [{ name: 'demo_metric', definition: 'demo' }],
+  };
+}
 
 const sql: SqlExecutor = {
   query: async () => ({
@@ -27,11 +30,43 @@ const sql: SqlExecutor = {
   }),
 };
 
-const logger = pino({ level: 'silent' });
-const tools = createFinanceTools(context, sql);
-const agent = new FinanceAgent({ context, sql, tools });
-const app = createApp({ config, logger, agent, metrics: [] });
+const insuranceSql: SqlExecutor = {
+  query: async () => ({
+    rows: [
+      { product_name: '车险', claim_amount: 28000 },
+      { product_name: '重疾险', claim_amount: 200000 },
+    ],
+    count: 2,
+  }),
+};
 
+function buildAgent(
+  domain: typeof financeDomain,
+  context: ContextEngine,
+  executor: SqlExecutor,
+): AgentSpec {
+  const tools = createFinanceTools(context, executor);
+  const agent = new DataAnalysisAgent({ domain, context, sql: executor, tools });
+  return {
+    id: domain.id,
+    label: domain.label,
+    description: domain.description,
+    agent,
+    metrics: [],
+  };
+}
+
+const logger = pino({ level: 'silent' });
+const deps: ApiDeps = {
+  config,
+  logger,
+  agents: [
+    buildAgent(financeDomain, buildContext('finance_fact'), sql),
+    buildAgent(insuranceDomain, buildContext('insurance_policy'), insuranceSql),
+  ],
+};
+
+const app = createApp(deps);
 const server: Server = app.listen(0);
 const baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 
@@ -47,7 +82,14 @@ describe('api', () => {
     expect(body.status).toBe('ok');
   });
 
-  it('answers a chat message with the full agent result', async () => {
+  it('lists registered agents', async () => {
+    const response = await fetch(`${baseUrl}/api/agents`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { agents: { id: string }[] };
+    expect(body.agents.map((a) => a.id)).toEqual(['finance', 'insurance']);
+  });
+
+  it('answers a finance question through the default chat route', async () => {
     const response = await fetch(`${baseUrl}/api/agent/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,10 +97,31 @@ describe('api', () => {
     });
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { answer: string; sql: string; data: unknown[] };
+    const body = (await response.json()) as { answer: string; sql: string };
     expect(body.answer).toContain('Q2');
     expect(body.sql).toContain('finance_fact');
-    expect(body.data).toHaveLength(2);
+  });
+
+  it('answers an insurance question through the domain route', async () => {
+    const response = await fetch(`${baseUrl}/api/agent/insurance/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: '各险种赔付率如何？' }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { answer: string; sql: string };
+    expect(body.sql).toContain('insurance_policy');
+    expect(body.answer).toContain('车险');
+  });
+
+  it('rejects unknown domains', async () => {
+    const response = await fetch(`${baseUrl}/api/agent/nope/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'hi' }),
+    });
+    expect(response.status).toBe(404);
   });
 
   it('rejects requests without a message', async () => {
@@ -67,7 +130,6 @@ describe('api', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
-
     expect(response.status).toBe(400);
   });
 });

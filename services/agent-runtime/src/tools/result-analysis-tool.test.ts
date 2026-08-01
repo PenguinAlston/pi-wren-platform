@@ -28,6 +28,20 @@ describe('analyzeQueryResult', () => {
     expect(result.observations[0]).toContain('-37.5%');
   });
 
+  it('handles grouped category data with share observations', () => {
+    const result = analyzeQueryResult(
+      [
+        { product_name: '车险', claim_amount: 28000, paid_amount: 28000 },
+        { product_name: '重疾险', claim_amount: 200000, paid_amount: 200000 },
+        { product_name: '医疗险', claim_amount: 21000, paid_amount: 15000 },
+      ],
+      '赔付率',
+    );
+
+    expect(result.observations.join(' ')).toContain('重疾险');
+    expect(result.observations.join(' ')).toContain('占比');
+  });
+
   it('handles empty results', () => {
     const result = analyzeQueryResult([], '问题');
     expect(result.summary).toContain('未返回任何数据');

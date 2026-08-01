@@ -1,0 +1,107 @@
+# 保险行业综合查询领域语义配置（MDL 式）
+name: insurance
+catalog: piwren
+schema: public
+
+models:
+  - name: insurance_policy
+    table: insurance_policy
+    description: 保单主表（在保/终止/满期）
+    columns:
+      - { name: policy_no, type: varchar, label: 保单号 }
+      - { name: product_name, type: varchar, label: 险种 }
+      - { name: premium, type: numeric, label: 保费 }
+      - { name: status, type: varchar, label: 保单状态 }
+  - name: insurance_claim
+    table: insurance_claim
+    description: 理赔表（立案/审核/赔付/拒赔）
+    columns:
+      - { name: claim_no, type: varchar, label: 理赔号 }
+      - { name: claim_amount, type: numeric, label: 报案金额 }
+      - { name: paid_amount, type: numeric, label: 已赔金额 }
+      - { name: status, type: varchar, label: 理赔状态 }
+  - name: insurance_payment
+    table: insurance_payment
+    description: 收付费表（保费入账）
+
+intents:
+  - name: claim_ratio
+    description: 赔付率分析（按险种汇总）
+    keywords: [赔付率, 理赔率, 赔付, 出险, 理赔金额, 赔款, 理赔]
+    sql: |
+      SELECT p.product_name,
+             COUNT(c.claim_no) AS claim_count,
+             SUM(c.claim_amount) AS claim_amount,
+             SUM(c.paid_amount) AS paid_amount
+      FROM insurance_claim c
+      JOIN insurance_policy p ON p.policy_no = c.policy_no
+      GROUP BY p.product_name
+      ORDER BY claim_amount DESC;
+
+  - name: premium
+    description: 保费规模（按险种）
+    keywords: [保费, 收入, 规模, 承保, premium, 保费规模]
+    sql: |
+      SELECT product_name, COUNT(*) AS policy_count, SUM(premium) AS total_premium
+      FROM insurance_policy
+      GROUP BY product_name
+      ORDER BY total_premium DESC;
+
+  - name: policy_status
+    description: 保单状态分布
+    keywords: [在保, 有效, 终止, 满期, 保单数量, 保单数, 保单状态, 保单]
+    sql: |
+      SELECT status, COUNT(*) AS policy_count
+      FROM insurance_policy
+      GROUP BY status
+      ORDER BY policy_count DESC;
+
+  - name: claim_status
+    description: 理赔状态分布
+    keywords: [立案, 审核, 拒赔, 已赔, 案件数, 理赔进度, 案件, 进度, 理赔状态]
+    sql: |
+      SELECT status, COUNT(*) AS claim_count
+      FROM insurance_claim
+      GROUP BY status
+      ORDER BY claim_count DESC;
+
+  - name: avg_premium
+    description: 件均保费（按险种）
+    keywords: [件均, 平均保费, 客单价]
+    sql: |
+      SELECT product_name, COUNT(*) AS policy_count, AVG(premium) AS avg_premium
+      FROM insurance_policy
+      GROUP BY product_name
+      ORDER BY avg_premium DESC;
+
+  - name: overview
+    description: 默认综合总览（按险种）
+    keywords: [保险, 总体, 概览, 综合, 情况]
+    sql: |
+      SELECT p.product_name,
+             COUNT(DISTINCT p.policy_no) AS policy_count,
+             SUM(p.premium) AS total_premium,
+             COUNT(DISTINCT c.claim_no) AS claim_count
+      FROM insurance_policy p
+      LEFT JOIN insurance_claim c ON c.policy_no = p.policy_no
+      GROUP BY p.product_name
+      ORDER BY total_premium DESC;
+
+defaultIntent: overview
+
+metrics:
+  - name: claim_ratio
+    definition: 已决赔款 / 已赚保费，超过 70% 属于高风险信号
+    unit: '%'
+  - name: active_policies
+    definition: 状态为"有效"的在保保单数量
+  - name: avg_premium
+    definition: 总保费 / 保单件数（件均保费）
+  - name: claim_count
+    definition: 理赔案件数量
+
+knowledge:
+  - 保单状态包括：有效、终止、满期
+  - 理赔状态包括：已立案、审核中、已赔付、已拒赔
+  - 赔付率超过 70% 属于高风险信号，需要关注承保质量
+  - 车险、医疗险属于高频低额理赔，重疾险、寿险属于低频高额理赔

@@ -6,16 +6,16 @@ Contributor guide for `pi-wren-platform`, an enterprise agent platform pairing t
 
 pnpm-workspaces monorepo (`pnpm-workspace.yaml`); all code is TypeScript. Each workspace owns a single concern:
 
-- `apps/api` — Express API: config validation, logging, health, `/api/agent/chat` (`src/`)
-- `apps/web` — Next.js chat console with execution trace and result table (`app/chat/`)
-- `services/agent-runtime` — agent execution: planner, tool registry, events, memory, `FinanceAgent` (`src/agents/`)
-- `services/context-engine` — Wren semantic layer: Wren AI client (`src/wren/`), demo SQL generation, metric definitions
+- `apps/api` — Express API: config validation, logging, health, `/api/agents`, `/api/agent/:domain/chat` (`src/`)
+- `apps/web` — Next.js chat console with multi-agent switcher, trace, and result table (`app/chat/`)
+- `services/agent-runtime` — agent execution: planner, tool registry, events, memory, domain-driven `DataAnalysisAgent` (`src/agents/`)
+- `services/context-engine` — Wren semantic layer: Wren AI client (`src/wren/`), MDL-style config engine (`src/mdl/`)
 - `services/data-engine` — PostgreSQL pool and SQL executor (`src/`)
 - `packages/agent-sdk` — LLM providers (OpenAI/Anthropic/Ollama/Mock) (`src/providers/`)
 - `packages/shared-types` — cross-boundary contracts (`src/index.ts`)
-- `infra/postgres` — schema and seed SQL (`init.sql`); `docs` — architecture and roadmap
+- `semantic/` — MDL-style YAML semantic configs (finance/insurance); `infra/postgres` — schema and seed SQL; `docs` — architecture and roadmap
 
-Put cross-cutting contracts in `packages/shared-types`; wire business logic through constructor-injected dependencies so tests can substitute fakes.
+Put cross-cutting contracts in `packages/shared-types`; new agents = new domain config + semantic YAML (no pipeline code changes). Wire business logic through constructor-injected dependencies so tests can substitute fakes.
 
 ## Build, Test, and Development Commands
 

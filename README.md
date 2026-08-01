@@ -17,14 +17,14 @@ docker compose up -d
 pnpm dev
 ```
 
-打开 <http://localhost:3000/chat>，尝试提问：
+打开 <http://localhost:3000/chat>，在页面上切换 Agent 后提问：
 
 ```
 为什么利润下降？
 本季度收入趋势如何？
 ```
 
-默认使用 `mock` LLM（离线确定性分析）与 `demo` 语义层，无需任何外部服务即可跑通全链路。接入真实 LLM / Wren AI 见下方配置。
+默认使用 `mock` LLM（离线确定性分析）与 MDL 式语义层（`semantic/*.mdl.yml`），无需任何外部服务即可跑通全链路。接入真实 LLM / Wren AI 见下方配置。
 
 ## 架构
 
@@ -33,7 +33,7 @@ pnpm dev
  │
 Web Chat (Next.js, :3000)  ──/api 代理──►  API Gateway (Express, :8080)
                                              │
-                                        Finance Agent
+                                        DataAnalysisAgent（财务/保险，按领域配置驱动）
                                              │
                      ┌───────────────────────┼───────────────────────┐
                      │                       │                       │
@@ -55,7 +55,8 @@ Web Chat (Next.js, :3000)  ──/api 代理──►  API Gateway (Express, :80
 | `OPENAI_API_KEY` / `OPENAI_MODEL` | - / `gpt-4o-mini` | OpenAI 兼容接口（含 DeepSeek 等） |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | - / `claude-3-5-haiku-latest` | Anthropic |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434` / `qwen2.5:7b` | 本地 Ollama |
-| `WREN_URL` / `WREN_TOKEN` | - | 配置后启用真实 Wren AI 服务，否则使用 demo 语义层 |
+| `WREN_URL` / `WREN_TOKEN` | - | 配置后启用真实 Wren AI 服务，否则使用 MDL 式语义层 |
+| `SEMANTIC_DIR` | `semantic/` | 语义配置目录覆盖（可选） |
 
 ## 常用命令
 
@@ -74,15 +75,23 @@ apps/
   api/     Express API 服务（配置校验、日志、健康检查、chat 路由）
   web/     Next.js 聊天控制台（分析结论、执行轨迹、SQL、结果表）
 services/
-  agent-runtime/   智能体执行（计划、工具注册、事件、记忆、FinanceAgent）
-  context-engine/  Wren 语义层（Wren AI 客户端 + demo SQL 生成 + 指标定义）
+  agent-runtime/   智能体执行（计划、工具注册、事件、记忆、DataAnalysisAgent）
+  context-engine/  Wren 语义层（Wren AI 客户端 + MDL 式配置驱动引擎）
   data-engine/     PostgreSQL 数据引擎（连接池、SQL 执行）
 packages/
   agent-sdk/       LLM Provider 抽象（OpenAI / Anthropic / Ollama / Mock）
   shared-types/    跨服务共享类型
-infra/postgres/    建表与种子数据 (init.sql)
+semantic/          MDL 式语义配置（finance.mdl.yml / insurance.mdl.yml）
+infra/postgres/    建表与种子数据 (init.sql / insurance.sql)
 docs/              架构说明、进展与路线图
 ```
+
+## API 端点
+
+- `GET /api/agents` — 已注册 Agent 列表（id/标签/描述/指标）
+- `POST /api/agent/chat` — 默认财务分析 Agent
+- `POST /api/agent/:domain/chat` — 按领域调用（finance / insurance）
+- `GET /health` — 健康检查
 
 ## 测试
 

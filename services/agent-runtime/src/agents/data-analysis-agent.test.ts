@@ -3,7 +3,8 @@ import type { ChatMessage } from '@pi-wren/shared-types';
 import type { ContextEngine } from '@pi-wren/context-engine';
 import type { SqlExecutor } from '@pi-wren/data-engine';
 import type { ModelProvider } from '@pi-wren/agent-sdk';
-import { FinanceAgent } from './finance-agent';
+import { DataAnalysisAgent } from './data-analysis-agent';
+import { financeDomain, insuranceDomain } from './domain';
 import { createFinanceTools } from '../tools';
 import { InMemoryMemoryStore } from '../memory';
 
@@ -24,13 +25,16 @@ const fakeSql: SqlExecutor = {
   }),
 };
 
-function makeAgent(model?: ModelProvider, memory = new InMemoryMemoryStore()) {
+function makeAgent(domain = financeDomain, model?: ModelProvider, memory = new InMemoryMemoryStore()) {
   const sql = fakeSql;
   const tools = createFinanceTools(fakeContext, sql);
-  return { agent: new FinanceAgent({ context: fakeContext, sql, tools, model, memory }), memory };
+  return {
+    agent: new DataAnalysisAgent({ domain, context: fakeContext, sql, tools, model, memory }),
+    memory,
+  };
 }
 
-describe('FinanceAgent', () => {
+describe('DataAnalysisAgent', () => {
   it('runs the full pipeline without a model and returns a deterministic summary', async () => {
     const { agent } = makeAgent();
     const result = await agent.answer('为什么利润下降？');
@@ -54,14 +58,29 @@ describe('FinanceAgent', () => {
       name: 'mock',
       chat: async (messages: ChatMessage[]) => {
         expect(messages.at(0)?.role).toBe('system');
+        expect(messages.at(0)?.content).toContain('财务分析师');
         return { role: 'assistant', content: 'LLM 摘要：利润下滑 37.5%。' };
       },
     };
-    const { agent } = makeAgent(model);
+    const { agent } = makeAgent(financeDomain, model);
     const result = await agent.answer('为什么利润下降？');
 
     expect(result.answer).toBe('LLM 摘要：利润下滑 37.5%。');
     expect(result.toolCalls.some((t) => t.name === 'llm_summarize')).toBe(true);
+  });
+
+  it('uses the insurance domain system prompt for insurance agents', async () => {
+    const model: ModelProvider = {
+      name: 'mock',
+      chat: async (messages: ChatMessage[]) => ({
+        role: 'assistant',
+        content: messages.at(0)?.content?.includes('保险行业') ? '保险摘要' : '错误提示词',
+      }),
+    };
+    const { agent } = makeAgent(insuranceDomain, model);
+    const result = await agent.answer('赔付率如何？');
+
+    expect(result.answer).toBe('保险摘要');
   });
 
   it('returns a structured error when SQL generation fails', async () => {
@@ -73,7 +92,7 @@ describe('FinanceAgent', () => {
     };
     const sql = fakeSql;
     const tools = createFinanceTools(brokenContext, sql);
-    const agent = new FinanceAgent({ context: brokenContext, sql, tools });
+    const agent = new DataAnalysisAgent({ domain: financeDomain, context: brokenContext, sql, tools });
 
     const result = await agent.answer('为什么利润下降？');
 
@@ -83,7 +102,7 @@ describe('FinanceAgent', () => {
 
   it('persists the conversation to memory when a store is provided', async () => {
     const memory = new InMemoryMemoryStore();
-    const { agent } = makeAgent(undefined, memory);
+    const { agent } = makeAgent(financeDomain, undefined, memory);
 
     await agent.answer('为什么利润下降？');
 

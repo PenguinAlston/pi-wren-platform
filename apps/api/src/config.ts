@@ -23,6 +23,7 @@ const envSchema = z.object({
 
   WREN_URL: z.string().optional(),
   WREN_TOKEN: z.string().optional(),
+  SEMANTIC_DIR: z.string().optional(),
 });
 
 export type ApiConfig = z.infer<typeof envSchema>;
