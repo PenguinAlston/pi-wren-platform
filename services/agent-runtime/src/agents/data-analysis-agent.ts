@@ -156,6 +156,7 @@ export class DataAnalysisAgent {
           `问题：${question}`,
           `数据：\n${JSON.stringify(analysis.table, null, 2)}`,
           `初步观察：\n${analysis.observations.join('\n')}`,
+          '硬性要求：日期与数值必须逐字照抄上方数据，禁止改写、取整或推算；数据中不存在的字段如实说明"未包含"。',
         ].join('\n\n'),
       },
     ];

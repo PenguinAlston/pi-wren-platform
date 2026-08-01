@@ -59,6 +59,9 @@ describe('DataAnalysisAgent', () => {
       chat: async (messages: ChatMessage[]) => {
         expect(messages.at(0)?.role).toBe('system');
         expect(messages.at(0)?.content).toContain('财务分析师');
+        expect(messages.at(0)?.content).toContain('禁止编造');
+        // 摘要提示词包含防幻觉硬性要求
+        expect(messages.at(-1)?.content).toContain('逐字照抄');
         return { role: 'assistant', content: 'LLM 摘要：利润下滑 37.5%。' };
       },
     };
