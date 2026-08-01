@@ -19,7 +19,7 @@ function numericColumns(rows: Record<string, unknown>[]): string[] {
   const columns = new Set<string>();
   for (const row of rows) {
     for (const [key, value] of Object.entries(row)) {
-      if (toNumber(value) !== undefined) {
+      if (!isCodeLikeColumn(key) && toNumber(value) !== undefined) {
         columns.add(key);
       }
     }
@@ -28,6 +28,11 @@ function numericColumns(rows: Record<string, unknown>[]): string[] {
 }
 
 /** 时间序列列识别（quarter/month/year/date 等），命中则做环比变化分析。 */
+/** 代码型列（字典编码）不作为数值分析列，也不作为数值参与运算 */
+function isCodeLikeColumn(name: string): boolean {
+  return /(_type|_status|_code|_no|_id|type|status|code|no)$/i.test(name);
+}
+
 function isPeriodColumn(name: string): boolean {
   const n = name.toLowerCase();
   return (
@@ -116,9 +121,11 @@ export function analyzeQueryResult(
       }
     }
   } else {
-    // 分组数据：找第一个非数值列作为标签列
+    // 分组数据：标签列优先选代码型列（product_type/status 等），其次第一个非数值列
+    const firstRow = rows[0] ?? {};
     const labelColumn =
-      Object.keys(rows[0] ?? {}).find((key) => toNumber(rows[0]?.[key]) === undefined) ??
+      Object.keys(firstRow).find((key) => isCodeLikeColumn(key)) ??
+      Object.keys(firstRow).find((key) => toNumber(firstRow[key]) === undefined) ??
       'row';
     observations.push(...buildShareObservations(rows, labelColumn, columns));
   }

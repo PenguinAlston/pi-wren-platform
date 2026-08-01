@@ -13,7 +13,7 @@ interface AgentInfo {
 
 const EXAMPLES: Record<string, string[]> = {
   finance: ['为什么利润下降了？', '本季度收入趋势如何？', '成本变化情况如何？'],
-  insurance: ['各险种的赔付率如何？', '保费规模按险种分布？', '理赔案件的进度如何？'],
+  insurance: ['各险种的赔付率如何？', '保费规模按险种分布？', '理赔案件的进度如何？', '近期保全业务有哪些？', '核保结果如何？'],
 };
 
 export default function ChatPage() {

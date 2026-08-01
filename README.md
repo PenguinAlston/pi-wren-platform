@@ -82,7 +82,7 @@ packages/
   agent-sdk/       LLM Provider 抽象（OpenAI / Anthropic / Ollama / Mock）
   shared-types/    跨服务共享类型
 semantic/          MDL 式语义配置（finance.mdl.yml / insurance.mdl.yml）
-infra/postgres/    建表与种子数据 (init.sql / insurance.sql)
+infra/postgres/    建表与种子数据（init.sql / insurance_schema.sql 22张生产级表 / insurance_seed.sql）
 docs/              架构说明、进展与路线图
 ```
 

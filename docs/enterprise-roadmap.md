@@ -19,6 +19,7 @@
 - [x] DataAnalysisAgent 通用流水线：计划 → SQL → 查询 → 分析 → 摘要（领域配置驱动，已落地财务/保险双 Agent）
 - [x] 结构化执行事件（plan/tool_call/tool_result/observation/answer/error）与轨迹
 - [x] 内存会话记忆抽象（`MemoryStore` 接口）
+- [x] 保险核心业务表结构（依据需求文档：契约/保全/理赔/客户/字典等 22 张生产级表 + 种子数据）
 - [x] Express API：健康检查、请求校验、pino 结构化日志、统一错误处理、优雅停机
 - [x] Next.js 聊天控制台（结论、轨迹、SQL、结果表）
 - [x] Vitest 单元/集成测试（20+ 用例）

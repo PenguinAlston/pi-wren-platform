@@ -42,6 +42,23 @@ describe('analyzeQueryResult', () => {
     expect(result.observations.join(' ')).toContain('占比');
   });
 
+  it('treats dictionary code columns as labels, not numbers', () => {
+    const result = analyzeQueryResult(
+      [
+        { product_type: '01', policy_count: '7' },
+        { product_type: '04', policy_count: '2' },
+        { product_type: '05', policy_count: '1' },
+      ],
+      '保费规模',
+    );
+
+    const joined = result.observations.join(' ');
+    expect(joined).toContain('01');
+    expect(joined).toContain('policy_count');
+    // 代码列不应被当作数值参与占比计算
+    expect(joined).not.toContain('product_type 的 policy_count');
+  });
+
   it('handles empty results', () => {
     const result = analyzeQueryResult([], '问题');
     expect(result.summary).toContain('未返回任何数据');
