@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS finance_fact (
+    id SERIAL PRIMARY KEY,
+    quarter VARCHAR(20) NOT NULL,
+    revenue NUMERIC NOT NULL,
+    cost NUMERIC NOT NULL,
+    profit NUMERIC NOT NULL
+);
+
+INSERT INTO finance_fact (quarter, revenue, cost, profit)
+VALUES
+('Q1', 1000000, 600000, 400000),
+('Q2', 950000, 700000, 250000),
+('Q3', 1200000, 720000, 480000)
+ON CONFLICT DO NOTHING;
