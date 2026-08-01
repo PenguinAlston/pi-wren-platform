@@ -67,6 +67,7 @@ export class LlmContextEngine implements ContextEngine {
       const response = await this.opts.model.chat(messages, {
         temperature: 0,
         maxTokens: 800,
+        signal: AbortSignal.timeout(100_000),
       });
       return parseAndValidateSql(response.content, this.opts.config, this.opts.maxSqlLength);
     } catch {

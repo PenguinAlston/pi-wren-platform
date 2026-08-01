@@ -159,7 +159,11 @@ export class DataAnalysisAgent {
         ].join('\n\n'),
       },
     ];
-    return this.deps.model.chat(messages, { temperature: 0.2, maxTokens: 600 });
+    return this.deps.model.chat(messages, {
+      temperature: 0.2,
+      maxTokens: 600,
+      signal: AbortSignal.timeout(45_000),
+    });
   }
 
   private async saveMemory(

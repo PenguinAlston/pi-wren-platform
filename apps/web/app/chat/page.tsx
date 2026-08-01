@@ -45,12 +45,15 @@ export default function ChatPage() {
 
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 120_000);
 
     try {
       const response = await fetch(`/api/agent/${domain}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -60,8 +63,13 @@ export default function ChatPage() {
 
       setResult((await response.json()) as AgentRunResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '请求失败，请稍后重试');
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('请求超时（120 秒），请重试或换用更快的模型');
+      } else {
+        setError(err instanceof Error ? err.message : '请求失败，请稍后重试');
+      }
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   }

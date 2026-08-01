@@ -9,33 +9,75 @@ models:
     table: ins_policy_main
     description: 保单主表（契约业务核心）
     columns:
+      - { name: policy_id, type: varchar, label: 保单ID（关联键） }
       - { name: policy_no, type: varchar, label: 保单号 }
-      - { name: product_type, type: varchar, label: 险种类型 }
+      - { name: product_id, type: varchar, label: 产品ID }
+      - { name: product_type, type: varchar, label: 险种类型（字典编码 01重疾/02医疗/03意外/04寿险/05年金/06财产险） }
       - { name: product_name, type: varchar, label: 险种名称 }
-      - { name: policy_status, type: varchar, label: 保单状态 }
+      - { name: policy_status, type: varchar, label: 保单状态（01待核保 02承保有效 03暂保单 04已退保 05已终止 06已失效） }
+      - { name: applicant_id, type: varchar, label: 投保人客户ID }
+      - { name: insured_id, type: varchar, label: 被保人客户ID }
+      - { name: apply_date, type: date, label: 投保日期 }
+      - { name: effect_date, type: date, label: 生效日期 }
+      - { name: end_date, type: date, label: 终止日期 }
       - { name: year_premium, type: numeric, label: 年交保费 }
+      - { name: total_premium, type: numeric, label: 总保费 }
       - { name: total_amount, type: numeric, label: 累计保额 }
+      - { name: pay_type, type: varchar, label: 缴费方式 }
+      - { name: pay_year, type: integer, label: 缴费年限 }
       - { name: channel_type, type: varchar, label: 投保渠道 }
       - { name: org_code, type: varchar, label: 承保机构 }
+      - { name: underwrite_result, type: varchar, label: 核保结果 }
   - name: ins_claim_main
     table: ins_claim_main
-    description: 理赔主表
+    description: 理赔主表（policy_id 关联保单）
     columns:
+      - { name: claim_id, type: varchar, label: 理赔号 }
+      - { name: policy_id, type: varchar, label: 保单ID（关联 ins_policy_main.policy_id） }
       - { name: claim_type, type: varchar, label: 理赔类型 }
-      - { name: claim_status, type: varchar, label: 理赔状态 }
+      - { name: claim_status, type: varchar, label: 理赔状态（01待立案 02待查勘 03审核中 04赔付中 05已结案 06拒赔 07撤销报案） }
+      - { name: insured_id, type: varchar, label: 被保人客户ID }
+      - { name: accident_time, type: timestamp, label: 出险时间 }
+      - { name: report_time, type: timestamp, label: 报案时间 }
       - { name: apply_claim_amount, type: numeric, label: 申请赔付金额 }
       - { name: actual_claim_amount, type: numeric, label: 实际赔付金额 }
+      - { name: close_time, type: timestamp, label: 结案时间 }
+      - { name: claim_reason, type: varchar, label: 出险原因 }
   - name: ins_preserve_main
     table: ins_preserve_main
-    description: 保全主表（保单变更）
+    description: 保全主表（保单变更，policy_id 关联保单）
     columns:
-      - { name: preserve_type, type: varchar, label: 保全类型 }
-      - { name: preserve_status, type: varchar, label: 保全状态 }
+      - { name: preserve_id, type: varchar, label: 保全单号 }
+      - { name: policy_id, type: varchar, label: 保单ID }
+      - { name: preserve_type, type: varchar, label: 保全类型（01信息变更 02缴费变更 03受益人变更 04保额调整 05保单复效 06保单挂失 07退保申请） }
+      - { name: preserve_status, type: varchar, label: 保全状态（01待审核 02审核通过 03审核驳回 04已办结 05已撤销） }
+      - { name: apply_time, type: timestamp, label: 申请时间 }
+      - { name: change_desc, type: varchar, label: 变更描述 }
   - name: ins_policy_underwrite
     table: ins_policy_underwrite
-    description: 保单核保记录
+    description: 保单核保记录（policy_id 关联保单）
     columns:
-      - { name: underwrite_result, type: varchar, label: 核保结果 }
+      - { name: underwrite_id, type: varchar, label: 核保记录ID }
+      - { name: policy_id, type: varchar, label: 保单ID }
+      - { name: underwrite_time, type: timestamp, label: 核保时间 }
+      - { name: underwrite_type, type: varchar, label: 核保类型 }
+      - { name: underwrite_result, type: varchar, label: 核保结果（01通过 02拒保 03延期 04加费承保） }
+      - { name: add_fee_rate, type: numeric, label: 加费比例 }
+  - name: ins_customer
+    table: ins_customer
+    description: 客户表
+    columns:
+      - { name: customer_id, type: varchar, label: 客户ID }
+      - { name: customer_name, type: varchar, label: 客户姓名 }
+      - { name: gender, type: varchar, label: 性别 }
+      - { name: phone, type: varchar, label: 电话 }
+  - name: sys_dict
+    table: sys_dict
+    description: 业务字典表（dict_type + dict_value -> dict_label 中文标签）
+    columns:
+      - { name: dict_type, type: varchar, label: 字典类型 }
+      - { name: dict_value, type: varchar, label: 字典值 }
+      - { name: dict_label, type: varchar, label: 字典中文标签 }
 
 intents:
   - name: claim_ratio
