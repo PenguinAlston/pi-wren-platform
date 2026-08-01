@@ -21,7 +21,8 @@
     "zod": "3.24.2",
     "@pi-wren/agent-sdk": "workspace:*",
     "@pi-wren/context-engine": "workspace:*",
-    "@pi-wren/data-engine": "workspace:*"
+    "@pi-wren/data-engine": "workspace:*",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

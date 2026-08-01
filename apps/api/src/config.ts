@@ -1,4 +1,14 @@
 import { z } from 'zod';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { config as loadEnvFile } from 'dotenv';
+
+// 加载 .env：优先进程 cwd，其次仓库根（apps/api 运行时 -> ../../.env）
+for (const candidate of [join(process.cwd(), '.env'), join(process.cwd(), '../../.env')]) {
+  if (existsSync(candidate)) {
+    loadEnvFile({ path: candidate });
+  }
+}
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
