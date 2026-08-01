@@ -1,14 +1,18 @@
-import { AgentExecutor } from '../../../services/agent-runtime/src/executor';
+import { handleAgentChat, health } from './http';
 
-const executor = new AgentExecutor();
+export async function apiRequest(
+  path: string,
+  body?: { message: string },
+) {
+  if (path === '/health') {
+    return health();
+  }
 
-export async function chat(input: string) {
-  return executor.execute({
-    sessionId: crypto.randomUUID(),
-    input,
-  });
+  if (path === '/api/agent/chat' && body) {
+    return handleAgentChat(body);
+  }
+
+  return {
+    error: 'Not found',
+  };
 }
-
-// Future HTTP layer:
-// POST /agent/chat
-// GET /agent/events/:id
