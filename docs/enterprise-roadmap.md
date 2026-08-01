@@ -54,6 +54,7 @@
 - [ ] 指标定义管理界面（语义模型 CRUD）
 - [ ] 多数据源连接器（BigQuery、Snowflake 等）
 - [ ] 多租户与细粒度数据权限（行级/列级）
+- [ ] 开源 Pi 会话层接入（SSE 流式 + 会话持久化，Spike 已通过，见 `docs/pi-integration-assessment.md`）
 
 ## 架构决策记录
 
@@ -62,3 +63,4 @@
 - **`services/api` 已合并至 `apps/api`**：消除重复的 API 入口，统一为唯一 API 服务。
 - **packages 以源码形式被 workspace 消费**（`main` 指向 `src/index.ts`），dev 用 tsx、生产构建由 API 的 tsup 打包、Web 由 Next transpilePackages 处理。
 - **`.env` 位于仓库根**：API 通过 dotenv 自动加载（cwd 或仓库根），已被 gitignore，密钥不进入 Git。
+- **开源 Pi 仅作会话层接入（不替换流水线）**：`pi-agent-core` 嵌入 Spike 已跑通（DashScope 兼容 provider + 自定义工具 + 多轮会话），但 LLM 自由循环不可控，现有确定性 SQL 流水线保持不变；Pi 只用于会话持久化/事件流，详见 `docs/pi-integration-assessment.md`。
