@@ -60,6 +60,8 @@ export interface ApiDeps {
   audit?: OperationAuditLogger;
   /** 传统查询服务（契约/保全/理赔 + 字典，需求第 3 章）。 */
   query?: InsuranceQueryService;
+  /** AI 会话仓库（开源 Pi jsonl），支撑左侧会话栏/回看/重命名/删除（需求 4.2）。 */
+  sessions?: PiSessionStore;
 }
 
 interface DomainRegistration {
@@ -137,7 +139,7 @@ async function buildBuiltinAgents(
 /** Wire together the application dependencies from validated config. */
 export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiDeps> {
   const model = buildModel(config);
-  const memory: MemoryStore = new PiSessionStore({
+  const memory = new PiSessionStore({
     ...(config.SESSION_DIR ? { sessionsRoot: config.SESSION_DIR } : {}),
   });
   const agents = await buildBuiltinAgents(config, model, memory);
@@ -148,6 +150,7 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
     agents,
     audit: new NoopAuditLogger(),
     query,
+    sessions: memory,
   };
 
   // 自定义 Agent：配置了 AGENT_SECRET_KEY 时启用（连接串加密存储）

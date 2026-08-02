@@ -21,6 +21,7 @@ import { createHealthHandler } from './routes/health';
 import { createErrorHandler } from './middleware/error-handler';
 import { createTraditionalQueryRouter } from './routes/traditional-query';
 import { createDictsRouter, createOrgsRouter } from './routes/dicts';
+import { createSessionsRouter } from './routes/sessions';
 
 /** Assemble the Express application with middleware and routes. */
 export function createApp(deps: ApiDeps) {
@@ -46,6 +47,10 @@ export function createApp(deps: ApiDeps) {
     app.use('/api/traditional', createTraditionalQueryRouter(deps.query));
     app.use('/api/dicts', createDictsRouter(deps.query));
     app.use('/api/orgs', createOrgsRouter(deps.query));
+  }
+  // AI 会话管理（需求 4.2 左侧会话栏）
+  if (deps.sessions) {
+    app.use('/api/sessions', createSessionsRouter(deps.sessions));
   }
 
   // 自定义 Agent 管理面（X-Admin-Token）
