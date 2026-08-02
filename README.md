@@ -102,4 +102,4 @@ pnpm test   # 20+ 个用例：LLM provider、SQL 生成、结果分析、Finance
 
 ## 路线图
 
-见 [docs/enterprise-roadmap.md](docs/enterprise-roadmap.md)：包含已完成的工程化改造与后续企业级能力（认证/RBAC、Redis 记忆、流式输出、可观测性、容器化部署等）。
+见 [docs/technical-architecture.md](docs/technical-architecture.md)（技术架构结果版）与 [docs/enterprise-roadmap.md](docs/enterprise-roadmap.md)：包含已完成的工程化改造与后续企业级能力（认证/RBAC、Redis 记忆、流式输出、可观测性、容器化部署等）。

@@ -1,5 +1,6 @@
 # pi-wren-platform 架构
 
+> 📌 当前已落地结构的**最终形态**见 [technical-architecture.md](technical-architecture.md)（结果版，含分层图/模块表/数据流）。
 ## 设计原则
 
 - **执行层（Pi Agent Runtime 风格）**：Agent 流水线、工具注册、事件与记忆
