@@ -4,7 +4,8 @@ import { createPool } from './postgres-client';
 
 /** Abstraction so callers can swap Postgres for fakes in tests. */
 export interface SqlExecutor {
-  query(sql: string): Promise<QueryResult>;
+  /** 参数化查询：params 按 $1/$2 顺序绑定（如未提供则执行裸 SQL）。 */
+  query(sql: string, params?: unknown[]): Promise<QueryResult>;
 }
 
 export class PostgresSqlExecutor implements SqlExecutor {
@@ -14,9 +15,10 @@ export class PostgresSqlExecutor implements SqlExecutor {
     private readonly maxRows = 1_000,
   ) {}
 
-  async query(sql: string): Promise<QueryResult> {
+  async query(sql: string, params?: unknown[]): Promise<QueryResult> {
     try {
-      const result = await this.pool.query(sql);
+      const result =
+        params && params.length > 0 ? await this.pool.query(sql, params) : await this.pool.query(sql);
       return {
         rows: (result.rows as Record<string, unknown>[]).slice(0, this.maxRows),
         count: result.rowCount,

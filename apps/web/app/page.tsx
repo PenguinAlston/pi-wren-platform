@@ -16,8 +16,11 @@ export default function Home() {
           用自然语言向企业数据提问，平台将完成：业务理解 → 语义层生成 SQL → 数据查询 →
           结果分析 → 执行摘要。
         </p>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Link href="/chat" className="btn">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link href="/query" className="btn">
+            传统业务查询
+          </Link>
+          <Link href="/chat" className="btn btn-secondary">
             进入分析控制台
           </Link>
           <Link href="/agents" className="btn btn-secondary">

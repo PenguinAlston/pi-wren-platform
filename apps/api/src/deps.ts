@@ -28,6 +28,7 @@ import {
   type ContextEngine,
   type SemanticConfig,
 } from '@pi-wren/context-engine';
+import { InsuranceQueryService } from '@pi-wren/insurance-query';
 import { createDefaultSqlExecutor, createPool, type SqlExecutor } from '@pi-wren/data-engine';
 import { PiSessionStore } from '@pi-wren/pi-bridge';
 import type { MetricDefinition } from '@pi-wren/shared-types';
@@ -57,6 +58,8 @@ export interface ApiDeps {
   poolManager?: AgentPoolManager;
   /** 操作审计（sys_operation_log）。 */
   audit?: OperationAuditLogger;
+  /** 传统查询服务（契约/保全/理赔 + 字典，需求第 3 章）。 */
+  query?: InsuranceQueryService;
 }
 
 interface DomainRegistration {
@@ -138,11 +141,13 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
     ...(config.SESSION_DIR ? { sessionsRoot: config.SESSION_DIR } : {}),
   });
   const agents = await buildBuiltinAgents(config, model, memory);
+  const query = new InsuranceQueryService(createDefaultSqlExecutor());
   const deps: ApiDeps = {
     config,
     logger,
     agents,
     audit: new NoopAuditLogger(),
+    query,
   };
 
   // 自定义 Agent：配置了 AGENT_SECRET_KEY 时启用（连接串加密存储）

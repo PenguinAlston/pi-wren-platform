@@ -206,3 +206,17 @@ INSERT INTO sys_dict (dict_id, dict_type, dict_label, dict_value, sort_num, stat
 ('DICT-UW-03',  'underwrite_result','延期', '03', 3, '1', '核保结果'),
 ('DICT-UW-04',  'underwrite_result','加费承保', '04', 4, '1', '核保结果')
 ON CONFLICT DO NOTHING;
+
+-- 补充字典：理赔类型 / 缴费方式（传统查询下拉联动；理赔表 claim_type 直接存中文标签，故 dict_value 与标签一致）
+INSERT INTO sys_dict (dict_id, dict_type, dict_label, dict_value, sort_num, status, remark) VALUES
+('DICT-CT-01', 'claim_type', '医疗理赔', '医疗理赔', 1, '1', '理赔类型'),
+('DICT-CT-02', 'claim_type', '重疾理赔', '重疾理赔', 2, '1', '理赔类型'),
+('DICT-CT-03', 'claim_type', '意外理赔', '意外理赔', 3, '1', '理赔类型'),
+('DICT-CT-04', 'claim_type', '身故理赔', '身故理赔', 4, '1', '理赔类型'),
+('DICT-CT-05', 'claim_type', '伤残理赔', '伤残理赔', 5, '1', '理赔类型'),
+('DICT-CT-06', 'claim_type', '财产理赔', '财产理赔', 6, '1', '理赔类型'),
+('DICT-PY-01', 'pay_type', '年交', '1', 1, '1', '缴费方式'),
+('DICT-PY-02', 'pay_type', '月交', '2', 2, '1', '缴费方式'),
+('DICT-PY-03', 'pay_type', '趸交', '3', 3, '1', '缴费方式'),
+('DICT-PY-04', 'pay_type', '季交', '4', 4, '1', '缴费方式')
+ON CONFLICT DO NOTHING;

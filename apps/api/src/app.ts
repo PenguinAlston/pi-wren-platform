@@ -19,6 +19,8 @@ import { createChatHandler } from './routes/chat';
 import { createChatStreamHandler } from './routes/chat-stream';
 import { createHealthHandler } from './routes/health';
 import { createErrorHandler } from './middleware/error-handler';
+import { createTraditionalQueryRouter } from './routes/traditional-query';
+import { createDictsRouter, createOrgsRouter } from './routes/dicts';
 
 /** Assemble the Express application with middleware and routes. */
 export function createApp(deps: ApiDeps) {
@@ -38,6 +40,13 @@ export function createApp(deps: ApiDeps) {
   app.post('/api/agent/:domain/chat', createChatHandler(deps, deps.logger));
   // SSE 流式输出：执行事件实时推送（方案 A 事件协议）
   app.post('/api/agent/:domain/chat/stream', createChatStreamHandler(deps, deps.logger));
+
+  // 传统业务查询（契约/保全/理赔 + 字典联动，需求第 3 章）
+  if (deps.query) {
+    app.use('/api/traditional', createTraditionalQueryRouter(deps.query));
+    app.use('/api/dicts', createDictsRouter(deps.query));
+    app.use('/api/orgs', createOrgsRouter(deps.query));
+  }
 
   // 自定义 Agent 管理面（X-Admin-Token）
   const adminAuth = requireAdminToken(deps);

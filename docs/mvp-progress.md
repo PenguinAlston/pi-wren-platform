@@ -33,6 +33,8 @@
 - [x] MDL 式语义引擎（模型/意图/指标/知识，YAML 配置驱动）
 - [x] 前端控制台：Agent 切换、执行轨迹、SQL、结果表、多轮续聊
 - [x] API：`/api/agents`、`/api/agent/:domain/chat`、SSE 流式、自定义 Agent 管理面、健康检查
+- [x] 传统查询后端（需求第 3 章）：契约/保全/理赔多条件组合查询 + 详情 + CSV 导出 + 字典/机构联动（`/api/traditional/*`、`/api/dicts`、`/api/orgs`），出口统一脱敏（身份证/手机号）
+- [x] 传统查询前端（`/query`）：顶部导航【传统查询】【AI 问答】+ 左侧模块切换 + 条件区（录入/下拉/日期/数值区间）+ 结果区（分页/排序/详情抽屉/导出）
 - [x] 工程化：pnpm workspace、strict TS、ESLint/Prettier、Vitest 92 用例、CI、pino 日志（敏感头脱敏）、zod 配置
 - [x] 生产构建：tsup CJS 单文件（修复 pg/yaml 等原生 CJS 依赖在 ESM bundle 的运行时错误）
 
@@ -59,5 +61,5 @@ PostgreSQL（内置 23 张表 + 自定义 Agent 独立连接池）
 - 认证/RBAC（当前管理面用轻量 `X-Admin-Token`）
 - AI 问答/传统查询的审计接入（当前仅自定义 Agent 管理操作）
 - 行级/列级数据权限（只读事务/语句超时/行数上限已完成）
-- 传统业务查询界面（契约/保全/理赔条件组合查询 + 分页导出）
+- 传统业务查询前端页面（后端 API 已完成；前端三张查询页已完成：模块切换/条件组合/分页排序/详情抽屉/CSV 导出）
 - 混合路由提速（常见问题 <1s）、LLM 摘要 token 级流式、生产部署（Dockerfile）

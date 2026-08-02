@@ -53,6 +53,9 @@ importers:
       '@pi-wren/data-engine':
         specifier: workspace:*
         version: link:../../services/data-engine
+      '@pi-wren/insurance-query':
+        specifier: workspace:*
+        version: link:../../services/insurance-query
       '@pi-wren/pi-bridge':
         specifier: workspace:*
         version: link:../../services/pi-bridge
@@ -194,6 +197,15 @@ importers:
       '@types/pg':
         specifier: ^8.15.0
         version: 8.20.0
+
+  services/insurance-query:
+    dependencies:
+      '@pi-wren/data-engine':
+        specifier: workspace:*
+        version: link:../data-engine
+      '@pi-wren/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
 
   services/pi-bridge:
     dependencies:

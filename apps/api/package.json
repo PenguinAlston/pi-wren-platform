@@ -24,7 +24,8 @@
     "@pi-wren/data-engine": "workspace:*",
     "dotenv": "^16.4.5",
     "@pi-wren/pi-bridge": "workspace:*",
-    "@pi-wren/agent-registry": "workspace:*"
+    "@pi-wren/agent-registry": "workspace:*",
+    "@pi-wren/insurance-query": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
