@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import DetailDrawer, { type DetailPayload } from './components/DetailDrawer';
-import { MODULES, formatValue, type ModuleId, type QueryFieldDef } from './modules';
+import {
+  MODULES,
+  formatValue,
+  type FilterGroupDef,
+  type ModuleId,
+  type QueryFieldDef,
+} from './modules';
 
 interface DictOption {
   value: string;
@@ -28,6 +34,18 @@ interface SortState {
 }
 
 const EMPTY_CONDITIONS: Record<string, string> = {};
+const MODULE_IDS: ModuleId[] = ['contract', 'preserve', 'claim'];
+
+/** 从 URL ?m= 读取初始模块（侧边栏切换会同步 URL）。 */
+function initialModule(): ModuleId {
+  if (typeof window !== 'undefined') {
+    const m = new URLSearchParams(window.location.search).get('m');
+    if (m === 'contract' || m === 'preserve' || m === 'claim') {
+      return m;
+    }
+  }
+  return 'contract';
+}
 
 function buildPayload(fields: QueryFieldDef[], conditions: Record<string, string>): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
@@ -48,9 +66,30 @@ function buildPayload(fields: QueryFieldDef[], conditions: Record<string, string
   return payload;
 }
 
+/** 状态列 → 胶囊语义色（终止/退保/拒赔=红，待办/处理中=黄，正常=绿，其余=信息蓝）。 */
+function pillTone(text: string): string {
+  if (/终止|退保|失效|拒赔|撤销|驳回|失败|错误/.test(text)) {
+    return 'pill-bad';
+  }
+  if (/待|中|申请|暂|查勘|审核中|处理中/.test(text)) {
+    return 'pill-warn';
+  }
+  if (/通过|有效|办结|结案|承保|完成|成功|正常/.test(text)) {
+    return 'pill-ok';
+  }
+  return 'pill-info';
+}
+
+/** 是否以等宽字体展示（编号/日期/金额）。 */
+function isMonoColumn(key: string): boolean {
+  return /_id$|_no$|time|amount|premium|_year$|date$/.test(key);
+}
+
 export default function QueryPage() {
-  const [moduleId, setModuleId] = useState<ModuleId>('contract');
+  const [moduleId, setModuleId] = useState<ModuleId>(initialModule);
   const [conditions, setConditions] = useState<Record<string, string>>({ ...EMPTY_CONDITIONS });
+  /** 手动展开的筛选分组（有值的分组始终自动展开）。 */
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
   const [dicts, setDicts] = useState<Record<string, DictOption[]>>({});
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [result, setResult] = useState<QueryPageResult | null>(null);
@@ -81,7 +120,8 @@ export default function QueryPage() {
   }, []);
 
   const runQuery = useCallback(
-    async (nextPage = 1, nextSort: SortState = sort) => {
+    async (nextPage = 1, nextSort: SortState = sort, conds?: Record<string, string>) => {
+      const effective = conds ?? conditions;
       setLoading(true);
       setError(null);
       try {
@@ -89,7 +129,7 @@ export default function QueryPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            conditions: buildPayload(module.fields, conditions),
+            conditions: buildPayload(module.fields, effective),
             page: nextPage,
             pageSize,
             sortBy: nextSort.sortBy,
@@ -109,7 +149,7 @@ export default function QueryPage() {
         setLoading(false);
       }
     },
-    [moduleId, conditions, pageSize, sort],
+    [moduleId, conditions, pageSize, sort, module.fields],
   );
 
   const switchModule = (next: ModuleId) => {
@@ -118,11 +158,25 @@ export default function QueryPage() {
     }
     setModuleId(next);
     setConditions({ ...EMPTY_CONDITIONS });
+    setOpenGroups(new Set());
     setResult(null);
     setPage(1);
     setSort({ sortOrder: 'desc' });
     setError(null);
     setDetail(null);
+    window.history.replaceState(null, '', `/query?m=${next}`);
+  };
+
+  const clearCondition = (key: string) => {
+    const next = { ...conditions, [key]: '' };
+    setConditions(next);
+    void runQuery(1, sort, next);
+  };
+
+  const resetConditions = () => {
+    setConditions({ ...EMPTY_CONDITIONS });
+    setResult(null);
+    setError(null);
   };
 
   const toggleSort = (sortKey: string) => {
@@ -183,14 +237,58 @@ export default function QueryPage() {
     }
   };
 
+  const selectOptions = (field: QueryFieldDef) => {
+    if (field.source === 'orgs') {
+      return orgs.map((org) => ({ value: org.orgId, label: org.orgName }));
+    }
+    return dicts[field.dictType ?? ''] ?? [];
+  };
+
+  const fieldDisplay = (field: QueryFieldDef): string => {
+    const raw = conditions[field.key] ?? '';
+    if (!raw) {
+      return '';
+    }
+    if (field.type === 'select') {
+      const match = selectOptions(field).find((o) => o.value === raw);
+      if (match) {
+        return match.label;
+      }
+    }
+    return raw;
+  };
+
+  const activeChips = module.fields
+    .filter((field) => conditions[field.key])
+    .map((field) => ({ field, display: fieldDisplay(field) }));
+
+  const groupActiveCount = (keys: string[]) => keys.filter((key) => conditions[key]).length;
+
+  const isGroupOpen = (group: FilterGroupDef) =>
+    openGroups.has(group.id) || groupActiveCount(group.keys) > 0;
+
+  const toggleGroup = (id: string) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+
+  const allGroupsOpen = module.filterGroups.length > 0 && module.filterGroups.every(isGroupOpen);
+
+  const toggleAllGroups = () => {
+    setOpenGroups(allGroupsOpen ? new Set() : new Set(module.filterGroups.map((g) => g.id)));
+  };
+
   const renderField = (field: QueryFieldDef) => {
     const value = conditions[field.key] ?? '';
     const setValue = (next: string) => setConditions((prev) => ({ ...prev, [field.key]: next }));
     if (field.type === 'select') {
-      const options =
-        field.source === 'orgs'
-          ? orgs.map((org) => ({ value: org.orgId, label: org.orgName }))
-          : (dicts[field.dictType ?? ''] ?? []);
+      const options = selectOptions(field);
       return (
         <select className="field-input" value={value} onChange={(e) => setValue(e.target.value)}>
           <option value="">全部</option>
@@ -239,58 +337,132 @@ export default function QueryPage() {
 
   return (
     <main className="query-layout">
-      {/* 左侧模块切换（需求 3.1） */}
+      {/* 左侧：模块胶囊 + 筛选侧栏 */}
       <aside className="query-sidebar">
-        {(['contract', 'preserve', 'claim'] as ModuleId[]).map((id) => (
-          <button
-            key={id}
-            className={`query-module-btn${moduleId === id ? ' active' : ''}`}
-            onClick={() => switchModule(id)}
-          >
-            {MODULES[id].label}
-          </button>
-        ))}
+        <section className="side-panel">
+          <header className="side-panel-head">
+            <h3>业务模块</h3>
+          </header>
+          <div className="stations">
+            {MODULE_IDS.map((id) => {
+              const m = MODULES[id];
+              return (
+                <button
+                  key={id}
+                  className={'query-module-btn' + (moduleId === id ? ' active' : '')}
+                  onClick={() => switchModule(id)}
+                >
+                  <span className="mi">{m.icon}</span>
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="side-panel">
+          <header className="side-panel-head">
+            <h3>查询条件</h3>
+            <button className="panel-toggle" onClick={toggleAllGroups}>
+              {allGroupsOpen ? '收起全部' : '展开全部'}
+            </button>
+          </header>
+          <div className="filter-sections">
+            {module.filterGroups.map((group) => {
+              const count = groupActiveCount(group.keys);
+              const open = isGroupOpen(group);
+              return (
+                <div key={group.id} className="filter-section">
+                  <button
+                    className="filter-section-head"
+                    onClick={() => toggleGroup(group.id)}
+                    aria-expanded={open}
+                  >
+                    <span className={'f-arrow' + (open ? ' open' : '')}>▸</span>
+                    {group.title}
+                    <span className={'g-count' + (count > 0 ? '' : ' empty')}>
+                      {count > 0 ? count : '0'}
+                    </span>
+                  </button>
+                  {open ? (
+                    <div className="filter-section-body">
+                      {group.keys.map((key) => {
+                        const field = module.fields.find((f) => f.key === key);
+                        if (!field) {
+                          return null;
+                        }
+                        return (
+                          <div key={key} className="query-field">
+                            <label className="query-field-label">{field.label}</label>
+                            {renderField(field)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+            <div className="filter-actions">
+              <button className="btn" onClick={() => void runQuery(1)} disabled={loading}>
+                {loading ? (
+                  <>
+                    <span className="spinner" />
+                    查询中
+                  </>
+                ) : (
+                  '▶ 查询'
+                )}
+              </button>
+              <button className="btn btn-secondary" title="重置条件" onClick={resetConditions}>
+                重置
+              </button>
+              <button
+                className="btn btn-secondary"
+                title="导出 CSV"
+                onClick={() => void exportCsv()}
+                disabled={loading}
+              >
+                导出
+              </button>
+            </div>
+          </div>
+        </section>
       </aside>
 
+      {/* 右侧：结果监控区 */}
       <section className="query-main">
-        <div className="card">
-          <h2 className="section">{module.label} · 条件查询</h2>
-          <div className="query-form-grid">
-            {module.fields.map((field) => (
-              <div key={field.key} className="query-field">
-                <label className="query-field-label">{field.label}</label>
-                {renderField(field)}
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button className="btn" onClick={() => void runQuery(1)} disabled={loading}>
-              {loading ? '查询中…' : '查询'}
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                setConditions({ ...EMPTY_CONDITIONS });
-                setResult(null);
-                setError(null);
-              }}
-            >
-              重置
-            </button>
-            <button className="btn btn-secondary" onClick={() => void exportCsv()} disabled={loading}>
-              导出
-            </button>
-            <span className="meta" style={{ marginLeft: 'auto' }}>
-              所有条件为且关系，可自由搭配
-            </span>
-          </div>
+        <div className="query-page-head">
+          <h2>
+            {module.label}
+            <span className="tag">{moduleId.toUpperCase()}</span>
+          </h2>
+          <span className="meta">所有条件为且关系 · 可自由搭配</span>
         </div>
+
+        {activeChips.length > 0 ? (
+          <div className="chips">
+            {activeChips.map(({ field, display }) => (
+              <span key={field.key} className="chip">
+                <b>{field.label}</b>
+                {display}
+                <button onClick={() => clearCondition(field.key)} aria-label={'清除' + field.label}>
+                  ✕
+                </button>
+              </span>
+            ))}
+            <button className="chip chip-clear" onClick={resetConditions}>
+              清空全部
+            </button>
+          </div>
+        ) : null}
 
         {error ? <div className="error-banner">{error}</div> : null}
 
         <div className="card">
           <div className="query-result-head">
-            <h2 className="section" style={{ margin: 0 }}>
+            <h2 className="card-title">
+              <span className="live" />
               查询结果
             </h2>
             {result ? (
@@ -300,11 +472,16 @@ export default function QueryPage() {
             ) : null}
           </div>
 
-          {loading && !result ? <p className="meta">加载中…</p> : null}
+          {loading && !result ? (
+            <div className="result-loading">
+              <span className="spinner" />
+              正在向数据库发起查询…
+            </div>
+          ) : null}
 
           {result && !loading ? (
             result.items.length === 0 ? (
-              <p className="meta">未查询到符合条件的记录。</p>
+              <p className="meta empty-result">未查询到符合条件的记录，试试放宽筛选条件。</p>
             ) : (
               <>
                 <div className="table-wrap">
@@ -334,12 +511,29 @@ export default function QueryPage() {
                     </thead>
                     <tbody>
                       {result.items.map((row, index) => (
-                        <tr key={index}>
-                          {module.columns.map((column) => (
-                            <td key={column.key} className={column.narrow ? 'col-narrow' : undefined}>
-                              {formatValue(row[column.key])}
-                            </td>
-                          ))}
+                        <tr
+                          key={index}
+                          style={{ animationDelay: Math.min(index * 28, 320) + 'ms' }}
+                        >
+                          {module.columns.map((column) => {
+                            const text = formatValue(row[column.key]);
+                            const isStatus = column.key.endsWith('_label');
+                            return (
+                              <td
+                                key={column.key}
+                                className={
+                                  (column.narrow ? 'col-narrow' : '') +
+                                  (isMonoColumn(column.key) ? ' mono' : '')
+                                }
+                              >
+                                {isStatus ? (
+                                  <span className={'pill ' + pillTone(text)}>{text}</span>
+                                ) : (
+                                  text
+                                )}
+                              </td>
+                            );
+                          })}
                           <td>
                             <button
                               className="link-btn"

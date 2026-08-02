@@ -54,7 +54,10 @@ export default function DetailDrawer({ payload, module, onClose, onOpenDetail }:
     <div className="drawer-backdrop" onClick={onClose}>
       <aside className="drawer" onClick={(event) => event.stopPropagation()}>
         <header className="drawer-header">
-          <h2 className="drawer-title">{module.label}详情</h2>
+          <h2 className="drawer-title">
+            {module.label}详情
+            <span className="drawer-module-tag">{payload.module.toUpperCase()}</span>
+          </h2>
           <button className="drawer-close" onClick={onClose} aria-label="关闭">
             ✕
           </button>

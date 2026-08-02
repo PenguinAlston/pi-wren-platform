@@ -237,8 +237,12 @@ export default function AgentsPage() {
 
   return (
     <main className="container">
+      <div className="page-head">
+        <h1>自定义 Agent 管理</h1>
+        <span className="meta">自助注册 · AES-256-GCM 加密 · 操作审计</span>
+      </div>
       <div className="card">
-        <h1 className="title">自定义 Agent 管理</h1>
+        <h2 className="section">接入与管理</h2>
         <p className="meta">
           用户提供 MDL + 数据库连接串即可注册专属查询 Agent。管理接口需 X-Admin-Token（生产环境建议接入 SSO/登录，勿在前端存储长期密钥）。
         </p>

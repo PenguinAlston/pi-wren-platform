@@ -29,12 +29,24 @@ export interface DetailSection {
   title: string;
 }
 
+export interface FilterGroupDef {
+  id: string;
+  title: string;
+  keys: string[];
+}
+
 export interface ModuleDef {
   id: ModuleId;
   label: string;
+  /** 侧边栏站台图标 */
+  icon: string;
+  /** 侧边栏站台描述 */
+  desc: string;
   fields: QueryFieldDef[];
   columns: ColumnDef[];
   detailSections: DetailSection[];
+  /** 筛选条件分组（侧边栏折叠面板） */
+  filterGroups: FilterGroupDef[];
   exportFilename: string;
 }
 
@@ -42,6 +54,8 @@ export const MODULES: Record<ModuleId, ModuleDef> = {
   contract: {
     id: 'contract',
     label: '契约查询',
+    icon: '▤',
+    desc: '保单 · 承保 · 缴费',
     fields: [
       { key: 'policyNo', label: '保单号', type: 'text', placeholder: '支持模糊查询' },
       { key: 'productType', label: '险种类型', type: 'select', dictType: 'product_type' },
@@ -79,12 +93,25 @@ export const MODULES: Record<ModuleId, ModuleDef> = {
       { key: 'payLogs', title: '缴费记录' },
       { key: 'underwrite', title: '核保记录' },
     ],
+    filterGroups: [
+      { id: 'policy', title: '保单信息', keys: ['policyNo', 'productType', 'policyStatus'] },
+      {
+        id: 'people',
+        title: '人员信息',
+        keys: ['applicantName', 'applicantIdNo', 'insuredName', 'insuredIdNo'],
+      },
+      { id: 'channel', title: '渠道与机构', keys: ['orgCode', 'channelType'] },
+      { id: 'time', title: '投保时间', keys: ['applyDateFrom', 'applyDateTo'] },
+      { id: 'amount', title: '保费区间', keys: ['premiumMin', 'premiumMax'] },
+    ],
     exportFilename: 'contract-export.csv',
   },
 
   preserve: {
     id: 'preserve',
     label: '保全查询',
+    icon: '⇄',
+    desc: '变更 · 复效 · 退保',
     fields: [
       { key: 'preserveId', label: '保全单号', type: 'text', placeholder: '支持模糊查询' },
       { key: 'policyId', label: '关联保单号', type: 'text', placeholder: '模糊匹配' },
@@ -111,12 +138,19 @@ export const MODULES: Record<ModuleId, ModuleDef> = {
       { key: 'benefits', title: '受益人变更' },
       { key: 'statusChanges', title: '状态变更' },
     ],
+    filterGroups: [
+      { id: 'basic', title: '保全单', keys: ['preserveId', 'policyId', 'preserveType', 'preserveStatus'] },
+      { id: 'people', title: '人员信息', keys: ['applicantName'] },
+      { id: 'time', title: '申请时间', keys: ['applyTimeFrom', 'applyTimeTo'] },
+    ],
     exportFilename: 'preserve-export.csv',
   },
 
   claim: {
     id: 'claim',
     label: '理赔查询',
+    icon: '◈',
+    desc: '报案 · 审核 · 赔付',
     fields: [
       { key: 'claimId', label: '理赔报案号', type: 'text', placeholder: '支持模糊查询' },
       { key: 'policyId', label: '关联保单号', type: 'text', placeholder: '模糊匹配' },
@@ -145,6 +179,12 @@ export const MODULES: Record<ModuleId, ModuleDef> = {
     detailSections: [
       { key: 'payments', title: '赔付明细' },
       { key: 'audits', title: '审核记录' },
+    ],
+    filterGroups: [
+      { id: 'basic', title: '理赔单', keys: ['claimId', 'policyId', 'claimType', 'claimStatus', 'accidentArea'] },
+      { id: 'people', title: '人员信息', keys: ['insuredName', 'insuredIdNo'] },
+      { id: 'time', title: '报案时间', keys: ['reportTimeFrom', 'reportTimeTo'] },
+      { id: 'amount', title: '赔付金额', keys: ['claimAmountMin', 'claimAmountMax'] },
     ],
     exportFilename: 'claim-export.csv',
   },

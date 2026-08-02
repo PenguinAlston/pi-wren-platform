@@ -3,7 +3,7 @@ import './globals.css';
 import Nav from './components/Nav';
 
 export const metadata: Metadata = {
-  title: 'Pi Wren 保险查询平台',
+  title: 'PI·WREN 企业数据智能平台',
   description: '保险业务传统查询 + AI 智能问答双模式查询系统',
 };
 
@@ -11,8 +11,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN">
       <body>
-        <Nav />
-        {children}
+        <div className="aurora" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="app-shell">
+          <Nav />
+          <main className="app-main">{children}</main>
+        </div>
       </body>
     </html>
   );
