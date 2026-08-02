@@ -1,5 +1,7 @@
 export interface AgentToolContext {
   question: string;
+  /** 最近几轮对话（user/assistant），供语义层做多轮延续解析（需求 4.3.3）。 */
+  history?: { role: 'user' | 'assistant'; content: string }[];
 }
 
 export interface AgentTool<I = unknown, O = unknown> {

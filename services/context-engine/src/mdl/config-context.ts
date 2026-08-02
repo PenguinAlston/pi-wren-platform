@@ -1,5 +1,5 @@
 import type { MetricDefinition } from '@pi-wren/shared-types';
-import type { ContextEngine } from '../context';
+import type { ContextEngine, ConversationTurn } from '../context';
 import { extractQuestionElements } from './question-elements';
 import type { SemanticConfig, SemanticIntent } from './types';
 
@@ -10,8 +10,8 @@ import type { SemanticConfig, SemanticIntent } from './types';
 export class ConfigDrivenContextEngine implements ContextEngine {
   constructor(private readonly config: SemanticConfig) {}
 
-  async generateSQL(question: string): Promise<string> {
-    const intent = this.matchIntent(question);
+  async generateSQL(question: string, history?: ConversationTurn[]): Promise<string> {
+    const intent = this.resolveIntent(question, history);
     if (!intent) {
       throw new Error(`无法为该问题生成 SQL：${question}`);
     }
@@ -40,6 +40,22 @@ export class ConfigDrivenContextEngine implements ContextEngine {
       definition: m.definition,
       unit: m.unit,
     }));
+  }
+
+  /** 意图解析：当前问题关键词命中优先；无命中时沿用上一轮意图（省略式追问），最后兜底默认意图。 */
+  private resolveIntent(question: string, history?: ConversationTurn[]): SemanticIntent | undefined {
+    const direct = this.matchIntent(question);
+    if (direct) {
+      return direct;
+    }
+    const fromHistory = this.matchHistoryIntent(history);
+    if (fromHistory) {
+      return fromHistory;
+    }
+    if (this.config.defaultIntent) {
+      return this.config.intents.find((i) => i.name === this.config.defaultIntent);
+    }
+    return this.config.intents.find((i) => i.name === 'default');
   }
 
   private matchIntent(question: string): SemanticIntent | undefined {
@@ -86,13 +102,23 @@ export class ConfigDrivenContextEngine implements ContextEngine {
         best = intent;
       }
     }
-    if (best && bestScore > 0) {
-      return best;
+    return best && bestScore > 0 ? best : undefined;
+  }
+
+  /** 从最近几轮对话中寻找上一轮的命中意图（多轮省略式追问，如"那理赔呢？"）。 */
+  private matchHistoryIntent(history?: ConversationTurn[]): SemanticIntent | undefined {
+    if (!history) {
+      return undefined;
     }
-    if (this.config.defaultIntent) {
-      return this.config.intents.find((i) => i.name === this.config.defaultIntent);
+    for (const turn of [...history].reverse()) {
+      if (turn.role === 'user') {
+        const intent = this.matchIntent(turn.content);
+        if (intent) {
+          return intent;
+        }
+      }
     }
-    return this.config.intents.find((i) => i.name === 'default');
+    return undefined;
   }
 }
 

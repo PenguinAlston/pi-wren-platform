@@ -10,8 +10,8 @@ export function createWrenSqlTool(context: ContextEngine): AgentTool<string, Wre
   return {
     name: 'wren_generate_sql',
     description: 'Generate SQL for a business question using enterprise semantic context',
-    async execute(question) {
-      const sql = await context.generateSQL(question);
+    async execute(question, toolContext) {
+      const sql = await context.generateSQL(question, toolContext.history);
       return { sql };
     },
   };

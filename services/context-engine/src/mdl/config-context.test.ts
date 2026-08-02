@@ -38,6 +38,18 @@ describe('ConfigDrivenContextEngine', () => {
     expect(await engine.generateSQL('随便聊聊')).toContain('insurance_policy');
   });
 
+  it('reuses the previous turn intent for elliptical follow-ups (multi-turn)', async () => {
+    // "那继续说说呢？" 无关键词 → 应沿用上一轮理赔意图而不是默认总览
+    const sql = await engine.generateSQL('那继续说说呢？', [
+      { role: 'user', content: '各险种赔付率如何？' },
+      { role: 'assistant', content: '重疾险 45%' },
+    ]);
+    expect(sql).toContain('insurance_claim');
+
+    // 无历史时仍走默认意图
+    expect(await engine.generateSQL('那继续说说呢？')).toContain('insurance_policy');
+  });
+
   it('lists and looks up metric definitions', async () => {
     const metrics = await engine.listMetrics();
     expect(metrics).toHaveLength(2);

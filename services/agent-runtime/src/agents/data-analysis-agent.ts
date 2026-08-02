@@ -35,6 +35,16 @@ export interface AnswerOptions {
 /** 注入摘要上下文的最近对话轮数。 */
 const HISTORY_INJECTION_TURNS = 3;
 
+/** 把会话记录折叠为对话轮（user/assistant），供 SQL 生成指代消解。 */
+function toTurns(records: ConversationRecord[]): { role: 'user' | 'assistant'; content: string }[] {
+  const turns: { role: 'user' | 'assistant'; content: string }[] = [];
+  for (const record of records) {
+    turns.push({ role: 'user', content: record.question });
+    turns.push({ role: 'assistant', content: record.answer });
+  }
+  return turns;
+}
+
 /** 结果完整性自检发现缺字段时的最大重查次数。 */
 const MAX_REPAIR_ATTEMPTS = 1;
 
@@ -57,7 +67,9 @@ export class DataAnalysisAgent {
     const events: AgentEvent[] = [];
     const trace: string[] = [];
     const toolCalls: AgentToolCall[] = [];
-    const context: AgentToolContext = { question };
+    // 多轮上下文：先加载最近几轮（同时用于 SQL 生成指代消解与摘要注入）
+    const history = await this.loadHistory(sessionId, question);
+    const context: AgentToolContext = { question, history: toTurns(history) };
 
     const emit = (type: Parameters<typeof createEvent>[0], label: string, detail?: string) => {
       const event = createEvent(type, label, detail);
@@ -164,7 +176,6 @@ export class DataAnalysisAgent {
       if (this.deps.model) {
         const summaryStart = Date.now();
         try {
-          const history = await this.loadHistory(sessionId, question);
           const summary = await this.summarize(question, analysis, history);
           answer = summary.content;
           toolCalls.push({

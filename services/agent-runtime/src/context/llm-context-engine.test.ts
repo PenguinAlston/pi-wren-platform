@@ -36,6 +36,27 @@ function makeModel(respondWith: (messages: ChatMessage[]) => string): ModelProvi
 }
 
 describe('LlmContextEngine', () => {
+  it('injects recent conversation history into the prompt for multi-turn context', async () => {
+    const captured: ChatMessage[][] = [];
+    const model = makeModel((messages) => {
+      captured.push(messages);
+      return 'SELECT COUNT(*) FROM ins_policy_main;';
+    });
+    const engine = new LlmContextEngine({ model, config, fallback });
+    const history = [
+      { role: 'user' as const, content: '投保渠道的占比如何？' },
+      { role: 'assistant' as const, content: '代理人占比最高 40%' },
+    ];
+
+    await engine.generateSQL('那保费呢？', history);
+
+    const prompt = captured[0]?.map((m) => m.content).join('\n') ?? '';
+    expect(prompt).toContain('投保渠道的占比如何？');
+    expect(prompt).toContain('代理人占比最高 40%');
+    // 多轮延续指令存在
+    expect(prompt).toContain('KEEP the previous turn');
+  });
+
   it('uses the LLM SQL when it is valid', async () => {
     const model = makeModel(
       () => 'SELECT COUNT(*) FROM ins_policy_main WHERE year_premium > 5000;',
