@@ -5,7 +5,7 @@ import type { SqlExecutor } from '@pi-wren/data-engine';
 import type { ModelProvider } from '@pi-wren/agent-sdk';
 import { DataAnalysisAgent } from './data-analysis-agent';
 import { financeDomain, insuranceDomain } from './domain';
-import { createFinanceTools } from '../tools';
+import { createDataAnalysisTools } from '../tools';
 import { InMemoryMemoryStore } from '../memory';
 
 const fakeContext: ContextEngine = {
@@ -27,7 +27,7 @@ const fakeSql: SqlExecutor = {
 
 function makeAgent(domain = financeDomain, model?: ModelProvider, memory = new InMemoryMemoryStore()) {
   const sql = fakeSql;
-  const tools = createFinanceTools(fakeContext, sql);
+  const tools = createDataAnalysisTools(fakeContext, sql);
   return {
     agent: new DataAnalysisAgent({ domain, context: fakeContext, sql, tools, model, memory }),
     memory,
@@ -94,7 +94,7 @@ describe('DataAnalysisAgent', () => {
       },
     };
     const sql = fakeSql;
-    const tools = createFinanceTools(brokenContext, sql);
+    const tools = createDataAnalysisTools(brokenContext, sql);
     const agent = new DataAnalysisAgent({ domain: financeDomain, context: brokenContext, sql, tools });
 
     const result = await agent.answer('为什么利润下降？');

@@ -6,7 +6,7 @@ import {
 import {
   DataAnalysisAgent,
   LlmContextEngine,
-  createFinanceTools,
+  createDataAnalysisTools,
   financeDomain,
   insuranceDomain,
   type AgentDomainConfig,
@@ -101,7 +101,7 @@ async function buildBuiltinAgents(
   for (const { domain, semanticFile } of DOMAINS) {
     const context = buildContext(config, semanticFile, model);
     const sql: SqlExecutor = createDefaultSqlExecutor();
-    const tools = createFinanceTools(context, sql);
+    const tools = createDataAnalysisTools(context, sql);
     const agent = new DataAnalysisAgent({ domain, context, sql, tools, model, memory });
     agents.push({
       id: domain.id,

@@ -3,7 +3,7 @@ import type { Server } from 'node:http';
 import { pino } from 'pino';
 import type { ContextEngine } from '@pi-wren/context-engine';
 import type { SqlExecutor } from '@pi-wren/data-engine';
-import { DataAnalysisAgent, createFinanceTools, financeDomain, insuranceDomain } from '@pi-wren/agent-runtime';
+import { DataAnalysisAgent, createDataAnalysisTools, financeDomain, insuranceDomain } from '@pi-wren/agent-runtime';
 import { createApp } from './app';
 import { loadConfig } from './config';
 import type { ApiConfig } from './config';
@@ -45,7 +45,7 @@ function buildAgent(
   context: ContextEngine,
   executor: SqlExecutor,
 ): AgentSpec {
-  const tools = createFinanceTools(context, executor);
+  const tools = createDataAnalysisTools(context, executor);
   const agent = new DataAnalysisAgent({ domain, context, sql: executor, tools });
   return {
     id: domain.id,

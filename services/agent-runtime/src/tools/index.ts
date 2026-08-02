@@ -11,8 +11,8 @@ export * from './database-tool';
 export * from './wren-sql-tool';
 export * from './wren-knowledge-tool';
 
-/** Build the default finance analysis tool set with injected dependencies. */
-export function createFinanceTools(context: ContextEngine, sqlExecutor: SqlExecutor): ToolRegistry {
+/** Build the generic data-analysis tool set (semantic SQL + database + knowledge) with injected dependencies. */
+export function createDataAnalysisTools(context: ContextEngine, sqlExecutor: SqlExecutor): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(createWrenSqlTool(context));
   registry.register(createDatabaseTool(sqlExecutor));
