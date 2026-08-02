@@ -1,8 +1,9 @@
 # 自定义 Agent 功能设计（自带 MDL + 数据库连接串）
 
-> **状态：Phase 1 已落地（2026-08）** —— `services/agent-registry` + `sys_agent_config` 表 +
-> 管理 API 全部端点 + 测试已实现（注册/加载/更新/注销/错误隔离/连接串加密/脱敏）。
-> Phase 2（前端管理页）、Phase 3（多租户/审计）待做。
+> **状态：Phase 1-3 已落地（2026-08）**
+> - Phase 1：`services/agent-registry` + `sys_agent_config` + 管理 API（注册/加载/更新/注销/错误隔离/加密/脱敏）
+> - Phase 2：前端管理页 `http://localhost:3000/agents`（MDL 校验、连接测试、启停/编辑/删除、池监控）+ 示例模板 `examples/mdl-template.yml`
+> - Phase 3：多租户 `owner_id`（列表按 owner 过滤）、管理操作审计落库 `sys_operation_log`（主体 `UADMIN`，失败不阻断）、连接池监控 `GET /api/admin/agents/:id/status`（total/idle/waiting）
 >
 > 目标：对外提供自助式 Agent 创建能力 —— 用户提供一份 MDL（YAML 语义配置）和
 > 一个数据库连接串，即可注册一个专属的自然语言查询 Agent，无需改代码、无需重新部署。

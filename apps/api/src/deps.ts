@@ -14,8 +14,11 @@ import {
 } from '@pi-wren/agent-runtime';
 import {
   AgentRegistry,
+  NoopAuditLogger,
   PostgresAgentConfigStore,
+  PostgresOperationAuditLogger,
   type CustomAgentFactory,
+  type OperationAuditLogger,
 } from '@pi-wren/agent-registry';
 import {
   ConfigDrivenContextEngine,
@@ -30,6 +33,7 @@ import type { MetricDefinition } from '@pi-wren/shared-types';
 import { join } from 'node:path';
 import type { ApiConfig } from './config';
 import { createCustomAgentFactory } from './custom-agent-factory';
+import { AgentPoolManager } from './pool-manager';
 import type { Logger } from './logger';
 
 export interface AgentSpec {
@@ -48,6 +52,10 @@ export interface ApiDeps {
   agents: AgentSpec[];
   /** 自定义 Agent 注册表（未配置 AGENT_SECRET_KEY 时为 undefined）。 */
   customAgents?: AgentRegistry<AgentSpec>;
+  /** 自定义 Agent 连接池管理器（监控/释放）。 */
+  poolManager?: AgentPoolManager;
+  /** 操作审计（sys_operation_log）。 */
+  audit?: OperationAuditLogger;
 }
 
 interface DomainRegistration {
@@ -122,15 +130,27 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
     ...(config.SESSION_DIR ? { sessionsRoot: config.SESSION_DIR } : {}),
   });
   const agents = await buildBuiltinAgents(config, model, memory);
-  const deps: ApiDeps = { config, logger, agents };
+  const deps: ApiDeps = {
+    config,
+    logger,
+    agents,
+    audit: new NoopAuditLogger(),
+  };
 
   // 自定义 Agent：配置了 AGENT_SECRET_KEY 时启用（连接串加密存储）
   if (config.AGENT_SECRET_KEY) {
-    const factory: CustomAgentFactory<AgentSpec> = createCustomAgentFactory({ model, memory });
+    const poolManager = new AgentPoolManager();
+    deps.poolManager = poolManager;
+    const factory: CustomAgentFactory<AgentSpec> = createCustomAgentFactory({
+      model,
+      memory,
+      poolManager,
+    });
     const registry = new AgentRegistry<AgentSpec>({
       store: new PostgresAgentConfigStore(createPool()),
       factory,
       secretKey: config.AGENT_SECRET_KEY,
+      onDispose: (agentId) => poolManager.dispose(agentId),
     });
     const load = await registry.loadAll();
     if (load.failed.length > 0) {
@@ -139,6 +159,9 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
     deps.customAgents = registry;
     agents.push(...registry.list());
   }
+
+  // 管理操作审计（写入 sys_operation_log；失败不阻断）
+  deps.audit = new PostgresOperationAuditLogger(createPool(), config.AUDIT_USER_ID);
 
   logger.info(
     {

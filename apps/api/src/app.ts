@@ -11,6 +11,7 @@ import {
   requireAdminToken,
   testAgentConnectionHandler,
   testDbConnectionHandler,
+  agentStatusHandler,
   updateAdminAgentHandler,
   validateMdlHandler,
 } from './routes/admin-agents';
@@ -45,6 +46,7 @@ export function createApp(deps: ApiDeps) {
   app.get('/api/admin/agents/:agentId', adminAuth, getAdminAgentHandler(deps));
   app.put('/api/admin/agents/:agentId', adminAuth, updateAdminAgentHandler(deps));
   app.delete('/api/admin/agents/:agentId', adminAuth, deleteAdminAgentHandler(deps));
+  app.get('/api/admin/agents/:agentId/status', adminAuth, agentStatusHandler(deps));
   app.post('/api/admin/agents/test', adminAuth, testDbConnectionHandler(deps));
   app.post('/api/admin/agents/:agentId/test', adminAuth, testAgentConnectionHandler(deps));
   app.post('/api/admin/agents/validate', adminAuth, validateMdlHandler(deps));

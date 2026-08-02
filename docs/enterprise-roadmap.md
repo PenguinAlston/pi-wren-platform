@@ -38,7 +38,7 @@
 - [ ] 身份认证与授权（API key / JWT / RBAC），目前 chat 路由完全开放
 - [ ] SQL 执行硬约束（数据库层只读事务、行数上限、超时）——生成层已有校验，执行层待加固
 - [x] 会话记忆持久化（基于开源 Pi jsonl 落盘，`data/sessions/`；Redis/多实例共享可后续替换）
-- [ ] 审计日志落库（`sys_operation_log` 表已建，未接入业务）
+- [~] 审计日志落库：自定义 Agent 管理操作已写入 `sys_operation_log`（注册/更新/启停/注销）；AI 问答/传统查询审计待接
 - [~] LLM 流式输出：执行事件 SSE 已完成（`/chat/stream`）；LLM 摘要 token 级流式待做
 - [ ] API 与 Web 的 Dockerfile + compose 编排（当前只有依赖服务）
 - [ ] 错误追踪（Sentry 或 OpenTelemetry 导出）
@@ -52,7 +52,7 @@
 - [ ] 缓存层（Redis 缓存指标定义与 SQL 生成结果）
 
 ### P3 — 平台化
-- [x] Agent 注册/发现中心：`/api/admin/agents` 自定义 Agent 注册（MDL + 连接串，见 `docs/custom-agent-design.md`）；工作流引擎（多步编排、审批流）待做
+- [x] Agent 注册/发现中心：`/api/admin/agents` 自定义 Agent 注册（MDL + 连接串 + ownerId 多租户 + 连接池监控 + 审计，见 `docs/custom-agent-design.md`）；工作流引擎（多步编排、审批流）待做
 - [ ] 指标定义管理界面（语义模型 CRUD）
 - [ ] 多数据源连接器（BigQuery、Snowflake 等）
 - [ ] 多租户与细粒度数据权限（行级/列级）

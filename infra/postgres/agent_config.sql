@@ -10,9 +10,11 @@ CREATE TABLE IF NOT EXISTS sys_agent_config (
   db_connection_enc TEXT NOT NULL,               -- AES-256-GCM 加密的连接配置 JSON
   status           VARCHAR(16) NOT NULL DEFAULT 'enabled',  -- enabled | disabled | error
   last_error       TEXT,
+  owner_id         VARCHAR(64),                  -- 多租户归属（RBAC 落地后由登录身份解析）
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 预留：多租户/RBAC 落地时启用
--- ALTER TABLE sys_agent_config ADD COLUMN IF NOT EXISTS owner_id VARCHAR(64);
+-- 已存在表的迁移（幂等）
+ALTER TABLE sys_agent_config ADD COLUMN IF NOT EXISTS owner_id VARCHAR(64);
+

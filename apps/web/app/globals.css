@@ -133,3 +133,26 @@ h2.section {
   font-size: 15px;
   margin: 0 0 12px;
 }
+
+/* Agent 管理页 badge */
+.badge-ok {
+  background: #e6f6ec;
+  color: #1a7f4b;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.badge-error {
+  background: #fdecea;
+  color: #c62828;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.badge-obs {
+  background: #eef1f5;
+  color: #5f6b7a;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}

@@ -12,6 +12,8 @@ export interface CustomAgentConfig {
   /** 数据库连接配置。 */
   db: DatabaseConfig;
   status: 'enabled' | 'disabled';
+  /** 多租户归属（RBAC 落地后由登录身份解析）。 */
+  ownerId?: string;
 }
 
 /** sys_agent_config 表中的一行（db_connection_enc 为密文）。 */
@@ -26,6 +28,7 @@ export interface AgentConfigRecord {
   dbConnectionEnc: string;
   status: string;
   lastError: string | null;
+  ownerId: string | null;
   createdAt: string;
   updatedAt: string;
 }

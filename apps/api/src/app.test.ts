@@ -304,6 +304,45 @@ describe('admin agents api', () => {
     expect((await response.json()) as { error: string }).toMatchObject({});
   });
 
+  it('filters agents by ownerId', async () => {
+    const response = await fetch(`${base}/api/admin/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+      body: JSON.stringify({
+        agentId: 'owner-a',
+        name: 'A',
+        label: 'A',
+        ownerId: 'team-1',
+        mdl: VALID_MDL,
+        db: { database: 'a', user: 'u', password: 'p' },
+      }),
+    });
+    expect(response.status).toBe(201);
+
+    const filtered = (await fetch(`${base}/api/admin/agents?ownerId=team-1`, {
+      headers: { 'x-admin-token': ADMIN_TOKEN },
+    }).then((r) => r.json())) as { agents: { agentId: string }[] };
+    expect(filtered.agents.map((a) => a.agentId)).toContain('owner-a');
+
+    const other = (await fetch(`${base}/api/admin/agents?ownerId=team-2`, {
+      headers: { 'x-admin-token': ADMIN_TOKEN },
+    }).then((r) => r.json())) as { agents: { agentId: string }[] };
+    expect(other.agents.map((a) => a.agentId)).not.toContain('owner-a');
+  });
+
+  it('reports agent runtime status (config + pool)', async () => {
+    const response = await fetch(`${base}/api/admin/agents/my-erp/status`, {
+      headers: { 'x-admin-token': ADMIN_TOKEN },
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { agentId: string; status: string; active: boolean; pool: unknown };
+    expect(body.agentId).toBe('my-erp');
+    expect(['enabled', 'disabled', 'error']).toContain(body.status);
+    expect(body.active).toBe(true);
+    // 测试环境无真实连接池管理，pool 为 null
+    expect(body.pool).toBeNull();
+  });
+
   it('updates and deletes a custom agent', async () => {
     const update = await fetch(`${base}/api/admin/agents/my-erp`, {
       method: 'PUT',

@@ -8,8 +8,9 @@ import {
 } from '@pi-wren/agent-runtime';
 import type { CustomAgentConfig, CustomAgentFactory } from '@pi-wren/agent-registry';
 import { ConfigDrivenContextEngine, parseSemanticConfig } from '@pi-wren/context-engine';
-import { PostgresSqlExecutor, createPool } from '@pi-wren/data-engine';
+import { PostgresSqlExecutor } from '@pi-wren/data-engine';
 import type { AgentSpec } from './deps';
+import type { AgentPoolManager } from './pool-manager';
 
 /** 自定义 Agent 缺省系统提示词（与内置 Agent 一致的防幻觉要求）。 */
 export const DEFAULT_CUSTOM_SYSTEM_PROMPT =
@@ -27,18 +28,13 @@ export const DEFAULT_CUSTOM_SYSTEM_PROMPT =
 export function createCustomAgentFactory(deps: {
   model?: ModelProvider;
   memory: MemoryStore;
+  poolManager: AgentPoolManager;
 }): CustomAgentFactory<AgentSpec> {
   return {
     async build(config: CustomAgentConfig): Promise<AgentSpec> {
       const semantic = parseSemanticConfig(config.mdl, `agent:${config.agentId}`);
-      const sql = new PostgresSqlExecutor(
-        createPool({
-          ...config.db,
-          max: config.db.max ?? 3,
-          connectionTimeoutMillis: 5_000,
-          statementTimeoutMillis: 15_000,
-        }),
-      );
+      // 独立连接池由 AgentPoolManager 统一管理（监控 + 更新/注销时释放）
+      const sql = new PostgresSqlExecutor(deps.poolManager.create(config.agentId, config.db));
       const configEngine = new ConfigDrivenContextEngine(semantic);
       const context = deps.model
         ? new LlmContextEngine({ model: deps.model, config: semantic, fallback: configEngine })

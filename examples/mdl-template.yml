@@ -1,0 +1,75 @@
+# ============================================================
+# 自定义 Agent 的 MDL 模板（YAML）
+# 注册后平台会：解析此文件 → 校验 → 构建独立查询 Agent
+#   - SQL 表名白名单 = 下面 models 声明的表（+ sys_dict）
+#   - intents 用于规则兜底（关键词 → SQL 模板）
+#   - metrics/knowledge 提供给 LLM 动态 SQL 与摘要
+# ============================================================
+
+name: my_agent                  # 语义配置标识（内部使用）
+# catalog: my_catalog          # 可选：数据源目录
+# schema: public               # 可选：数据库 schema
+
+# ---------- 1. 模型：声明可查询的表与列 ----------
+models:
+  - name: order                 # 模型名（语义层用）
+    table: orders               # 物理表名（SQL 白名单据此生成）
+    description: 订单主表
+    columns:
+      - name: order_id
+        type: varchar
+        label: 订单号
+      - name: customer_name
+        type: varchar
+        label: 客户姓名
+      - name: amount
+        type: numeric
+        label: 订单金额
+      - name: status
+        type: varchar
+        label: 订单状态
+      - name: created_at
+        type: timestamp
+        label: 下单时间
+
+  # - name: order_item
+  #   table: order_items
+  #   description: 订单明细
+  #   columns:
+  #     - name: order_id
+  #       type: varchar
+  #     - name: product_name
+  #       type: varchar
+  #     - name: quantity
+  #       type: integer
+
+# ---------- 2. 意图：常见问题 → SQL 模板（规则兜底） ----------
+intents:
+  - name: count_orders
+    description: 订单总量
+    keywords: [订单数, 多少单, 下单量, 总量]
+    sql: SELECT COUNT(*) AS order_count FROM orders
+
+  - name: amount_by_status
+    description: 按状态统计金额
+    keywords: [金额, 销售额, 按状态]
+    sql: SELECT status, SUM(amount) AS total_amount FROM orders GROUP BY status
+
+  - name: recent_orders
+    description: 最近订单
+    keywords: [最近, 最新订单]
+    sql: SELECT order_id, customer_name, amount, created_at FROM orders ORDER BY created_at DESC LIMIT 10
+
+# ---------- 3. 指标：业务口径（供摘要/分析参考） ----------
+metrics:
+  - name: total_sales
+    definition: 订单金额合计
+    unit: 元
+  - name: avg_order_amount
+    definition: 平均订单金额
+    unit: 元
+
+# ---------- 4. 知识：业务规则（LLM 生成 SQL 与摘要时参考） ----------
+knowledge:
+  - 订单状态字段取值：pending=待支付，paid=已支付，shipped=已发货，cancelled=已取消
+  - 金额单位为人民币元

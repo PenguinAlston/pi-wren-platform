@@ -41,6 +41,8 @@ const envSchema = z.object({
   // 自定义 Agent 管理面：ADMIN_TOKEN（X-Admin-Token 比对）+ 连接串加密密钥（≥32 字节）
   ADMIN_TOKEN: z.string().optional(),
   AGENT_SECRET_KEY: z.string().min(8, 'AGENT_SECRET_KEY 至少 8 字符，建议 ≥32 字节').optional(),
+  // 管理操作审计主体（sys_user.user_id），默认 UADMIN（z_admin_seed.sql 提供）
+  AUDIT_USER_ID: z.string().default('UADMIN'),
 });
 
 export type ApiConfig = z.infer<typeof envSchema>;

@@ -21,6 +21,7 @@ interface AgentConfigRow {
   db_connection_enc: string;
   status: string;
   last_error: string | null;
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +38,7 @@ function rowToRecord(row: AgentConfigRow): AgentConfigRecord {
     dbConnectionEnc: row.db_connection_enc,
     status: row.status,
     lastError: row.last_error,
+    ownerId: row.owner_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -44,7 +46,7 @@ function rowToRecord(row: AgentConfigRow): AgentConfigRecord {
 
 const SELECT_COLUMNS = `
   id, agent_id, name, label, description, system_prompt, mdl,
-  db_connection_enc, status, last_error, created_at, updated_at
+  db_connection_enc, status, last_error, owner_id, created_at, updated_at
 `;
 
 /** PostgreSQL 实现：读写 sys_agent_config 表。 */
@@ -69,8 +71,8 @@ export class PostgresAgentConfigStore implements AgentConfigStore {
   async create(record: Omit<AgentConfigRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<AgentConfigRecord> {
     const result = await this.pool.query<AgentConfigRow>(
       `INSERT INTO sys_agent_config
-        (agent_id, name, label, description, system_prompt, mdl, db_connection_enc, status, last_error)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (agent_id, name, label, description, system_prompt, mdl, db_connection_enc, status, last_error, owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING ${SELECT_COLUMNS}`,
       [
         record.agentId,
@@ -82,6 +84,7 @@ export class PostgresAgentConfigStore implements AgentConfigStore {
         record.dbConnectionEnc,
         record.status,
         record.lastError,
+        record.ownerId,
       ],
     );
     return rowToRecord(result.rows[0]!);
@@ -99,6 +102,7 @@ export class PostgresAgentConfigStore implements AgentConfigStore {
       dbConnectionEnc: 'db_connection_enc',
       status: 'status',
       lastError: 'last_error',
+      ownerId: 'owner_id',
     };
     for (const [key, column] of Object.entries(fieldMap)) {
       if (patch[key as keyof AgentConfigRecord] !== undefined) {

@@ -13,6 +13,8 @@ export interface AgentRegistryOptions<T> {
   factory: CustomAgentFactory<T>;
   /** AES-256-GCM 密钥材料，用于加解密数据库连接串。 */
   secretKey: string;
+  /** 实例销毁钩子（注销/更新替换时调用），用于释放连接池等资源。 */
+  onDispose?: (agentId: string) => Promise<void> | void;
 }
 
 export interface LoadResult {
@@ -81,11 +83,17 @@ export class AgentRegistry<T extends { id: string }> {
       dbConnectionEnc: this.encryptDb(merged.db),
       status: merged.status,
       lastError: null,
+      ownerId: merged.ownerId ?? null,
     });
     if (merged.status === 'enabled') {
+      const previous = this.agents.get(agentId);
       this.agents.set(agentId, instance);
+      if (previous && previous !== instance) {
+        await this.opts.onDispose?.(agentId);
+      }
     } else {
       this.agents.delete(agentId);
+      await this.opts.onDispose?.(agentId);
     }
     return instance;
   }
@@ -101,9 +109,10 @@ export class AgentRegistry<T extends { id: string }> {
     return this.update(agentId, { status });
   }
 
-  /** 注销：移除实例并删除配置。 */
+  /** 注销：移除实例、释放资源并删除配置。 */
   async unregister(agentId: string): Promise<boolean> {
     this.agents.delete(agentId);
+    await this.opts.onDispose?.(agentId);
     return this.opts.store.delete(agentId);
   }
 
@@ -144,6 +153,7 @@ export class AgentRegistry<T extends { id: string }> {
       mdl: record.mdl,
       db: this.decryptDb(record.dbConnectionEnc),
       status: record.status === 'disabled' ? 'disabled' : 'enabled',
+      ownerId: record.ownerId ?? undefined,
     };
   }
 
@@ -158,6 +168,7 @@ export class AgentRegistry<T extends { id: string }> {
       dbConnectionEnc: this.encryptDb(config.db),
       status: config.status,
       lastError: null,
+      ownerId: config.ownerId ?? null,
     };
   }
 

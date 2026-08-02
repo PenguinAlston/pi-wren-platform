@@ -152,3 +152,45 @@ describe('AgentRegistry', () => {
     expect(brokenRecord?.lastError).toBe('build failed: broken');
   });
 });
+
+describe('AgentRegistry resource disposal', () => {
+  it('calls onDispose on unregister', async () => {
+    const disposed: string[] = [];
+    const store = new InMemoryAgentConfigStore();
+    const registry = new AgentRegistry<FakeSpec>({
+      store,
+      factory: { async build(config) { return { id: config.agentId, label: config.label }; } },
+      secretKey: SECRET,
+      onDispose: (agentId) => void disposed.push(agentId),
+    });
+    await registry.register(makeConfig('erp'));
+    await registry.unregister('erp');
+    expect(disposed).toEqual(['erp']);
+  });
+
+  it('calls onDispose when update replaces the instance', async () => {
+    const disposed: string[] = [];
+    const registry = new AgentRegistry<FakeSpec>({
+      store: new InMemoryAgentConfigStore(),
+      factory: { async build(config) { return { id: config.agentId, label: config.label }; } },
+      secretKey: SECRET,
+      onDispose: (agentId) => void disposed.push(agentId),
+    });
+    await registry.register(makeConfig('erp'));
+    await registry.update('erp', { label: 'New' });
+    expect(disposed).toEqual(['erp']);
+  });
+
+  it('calls onDispose when disabling', async () => {
+    const disposed: string[] = [];
+    const registry = new AgentRegistry<FakeSpec>({
+      store: new InMemoryAgentConfigStore(),
+      factory: { async build(config) { return { id: config.agentId, label: config.label }; } },
+      secretKey: SECRET,
+      onDispose: (agentId) => void disposed.push(agentId),
+    });
+    await registry.register(makeConfig('erp'));
+    await registry.setStatus('erp', 'disabled');
+    expect(disposed).toEqual(['erp']);
+  });
+});

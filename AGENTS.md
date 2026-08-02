@@ -7,7 +7,7 @@
 pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 workspace 各司其职：
 
 - `apps/api` — Express API：zod 配置校验、pino 日志、健康检查、`/api/agents`、`/api/agent/:domain/chat`、`/api/agent/:domain/chat/stream`（SSE 流式，`src/routes/`）
-- `apps/web` — Next.js 聊天控制台：多 Agent 切换、执行轨迹、SQL、结果表（`app/chat/`）
+- `apps/web` — Next.js 聊天控制台（`app/chat/`）+ 自定义 Agent 管理页（`app/agents/`）：MDL 粘贴、连接测试、注册/启停/编辑/删除、池监控
 - `services/agent-runtime` — Agent 执行：计划、工具注册、事件、记忆、领域驱动的 `DataAnalysisAgent`（`src/agents/`，支持 `sessionId` 续聊 + `onEvent` 流式回调）；LLM 动态 SQL 生成与安全校验（`src/context/`）
 - `services/pi-bridge` — 开源 Pi 会话层（方案 A）：基于 `@earendil-works/pi-agent-core` 的 jsonl 多轮会话持久化（`PiSessionStore`）、压缩决策、SSE 事件协议（`src/`）
 - `services/agent-registry` — 自定义 Agent 注册表：`sys_agent_config` 持久化、连接串 AES-256-GCM 加密（`crypto.ts`）、运行时动态加载/更新/注销与错误隔离（`registry.ts`、`store.ts`）
@@ -26,7 +26,7 @@ pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 works
 
 - `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `pnpm-workspace.yaml` 的 `allowBuilds`）
 - `pnpm dev` — 并行启动 API（:8080）与 Web（:3000）。**不要在 dev 运行时执行 `pnpm build`**（两者共用 `.next` 缓存会冲突）
-- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（70 个用例；API 集成测试需可监听本地端口）
+- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（78 个用例；API 集成测试需可监听本地端口）
 - `docker compose up -d` — 启动 PostgreSQL/Redis（使用本机镜像，见 `docker-compose.yml`）
 - 配置：在仓库根创建 `.env`（参考 `.env.example`），API 通过 dotenv 自动加载；`LLM_PROVIDER`（`mock|openai|anthropic|ollama`）切换离线规则模式与 LLM 动态 SQL 模式；`SESSION_DIR` 可覆盖会话存储目录（默认 `data/sessions`，已 gitignore）；`ADMIN_TOKEN`（管理面鉴权）+ `AGENT_SECRET_KEY`（连接串加密密钥，配置后才启用自定义 Agent）
 

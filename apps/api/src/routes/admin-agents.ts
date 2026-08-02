@@ -25,9 +25,13 @@ const createAgentSchema = z.object({
   systemPrompt: z.string().trim().max(8000).optional(),
   mdl: z.string().trim().min(10, 'MDL 内容过短').max(262_144, 'MDL 超过 256KB'),
   db: dbSchema,
+  ownerId: z.string().trim().max(64).optional(),
 });
 
-const updateAgentSchema = createAgentSchema.partial().omit({ agentId: true });
+const updateAgentSchema = createAgentSchema
+  .partial()
+  .omit({ agentId: true })
+  .extend({ status: z.enum(['enabled', 'disabled']).optional() });
 
 const validateMdlSchema = z.object({ mdl: z.string().trim().min(10).max(262_144) });
 
@@ -98,7 +102,18 @@ export function createAdminAgentHandler(deps: ApiDeps) {
     }
     const { agentId, db, ...config } = parsed.data;
     try {
-      const instance = await registry.register({ agentId, ...config, db: normalizeDb(db) });
+      const instance = await registry.register({
+        agentId,
+        ...config,
+        db: normalizeDb(db),
+        ownerId: parsed.data.ownerId,
+      });
+      await deps.audit?.log({
+        operType: 'agent_register',
+        operContent: `注册自定义 Agent：${agentId}（${config.label}）`,
+        sqlContent: `mdl=${parsed.data.mdl.length} chars`,
+        ipAddress: req.ip,
+      });
       res.status(201).json({
         agent: {
           id: instance.id,
@@ -115,11 +130,13 @@ export function createAdminAgentHandler(deps: ApiDeps) {
 }
 
 export function listAdminAgentsHandler(deps: ApiDeps) {
-  return async (_req: Request, res: Response) => {
+  return async (req: Request, res: Response) => {
     const registry = ensureRegistry(deps, res);
     if (!registry) return;
+    const ownerId = typeof req.query.ownerId === 'string' ? req.query.ownerId : undefined;
     const records = await registry.getRecords();
-    res.json({ agents: records.map((r) => toPublicView(r, false)) });
+    const filtered = ownerId ? records.filter((r) => r.ownerId === ownerId) : records;
+    res.json({ agents: filtered.map((r) => toPublicView(r, false)) });
   };
 }
 
@@ -146,15 +163,25 @@ export function updateAdminAgentHandler(deps: ApiDeps) {
       return;
     }
     const { db, ...patch } = parsed.data;
+    const agentId = req.params.agentId as string;
     try {
-      const instance = await registry.update(req.params.agentId as string, {
+      const before = await registry.getRecord(agentId);
+      const instance = await registry.update(agentId, {
         ...patch,
         ...(db ? { db: normalizeDb(db) } : {}),
       });
       if (!instance) {
-        res.status(404).json({ error: `agent not found: ${req.params.agentId}` });
+        res.status(404).json({ error: `agent not found: ${agentId}` });
         return;
       }
+      const operType =
+        before && patch.status && patch.status !== before.status ? 'agent_status' : 'agent_update';
+      await deps.audit?.log({
+        operType,
+        operContent: `${operType === 'agent_status' ? '变更状态' : '更新配置'}：${agentId}（${instance.label}）`,
+        sqlContent: patch.mdl ? `mdl=${patch.mdl.length} chars` : undefined,
+        ipAddress: req.ip,
+      });
       res.json({ agent: { id: instance.id, label: instance.label, source: 'custom' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -167,11 +194,18 @@ export function deleteAdminAgentHandler(deps: ApiDeps) {
   return async (req: Request, res: Response) => {
     const registry = ensureRegistry(deps, res);
     if (!registry) return;
-    const deleted = await registry.unregister(req.params.agentId as string);
+    const agentId = req.params.agentId as string;
+    const before = await registry.getRecord(agentId);
+    const deleted = await registry.unregister(agentId);
     if (!deleted) {
-      res.status(404).json({ error: `agent not found: ${req.params.agentId}` });
+      res.status(404).json({ error: `agent not found: ${agentId}` });
       return;
     }
+    await deps.audit?.log({
+      operType: 'agent_delete',
+      operContent: `注销自定义 Agent：${agentId}（${before?.name ?? 'unknown'}）`,
+      ipAddress: req.ip,
+    });
     res.status(204).end();
   };
 }
@@ -220,6 +254,27 @@ export function testAgentConnectionHandler(deps: ApiDeps) {
     }
     const result = await probeConnection(config);
     res.status(result.ok ? 200 : 400).json(result);
+  };
+}
+
+/** Agent 运行状态：配置状态 + 连接池统计（监控）。 */
+export function agentStatusHandler(deps: ApiDeps) {
+  return async (req: Request, res: Response) => {
+    const registry = ensureRegistry(deps, res);
+    if (!registry) return;
+    const agentId = req.params.agentId as string;
+    const record = await registry.getRecord(agentId);
+    if (!record) {
+      res.status(404).json({ error: `agent not found: ${agentId}` });
+      return;
+    }
+    res.json({
+      agentId,
+      status: record.status,
+      lastError: record.lastError,
+      active: registry.get(agentId) !== undefined,
+      pool: deps.poolManager?.stats(agentId) ?? null,
+    });
   };
 }
 

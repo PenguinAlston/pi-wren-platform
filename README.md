@@ -92,11 +92,14 @@ docs/              架构说明、进展与路线图
 - `POST /api/agent/chat` — 默认财务分析 Agent
 - `POST /api/agent/:domain/chat` — 按领域调用（finance / insurance），支持 `sessionId` 续聊
 - `POST /api/agent/:domain/chat/stream` — SSE 流式版：执行事件实时推送（前端已接入）
-- 自定义 Agent 管理面（需 `X-Admin-Token`，见 `.env` 的 `ADMIN_TOKEN`）：
-  - `POST /api/admin/agents` — 注册（MDL + 数据库连接串，连接串 AES 加密落库）
-  - `GET/PUT/DELETE /api/admin/agents/:id`、`GET /api/admin/agents` — 管理
+- 自定义 Agent 管理面（需 `X-Admin-Token`，见 `.env` 的 `ADMIN_TOKEN`；网页入口 `http://localhost:3000/agents`）：
+  - `POST /api/admin/agents` — 注册（MDL + 数据库连接串，连接串 AES 加密落库，支持 `ownerId` 多租户归属）
+  - `GET/PUT/DELETE /api/admin/agents/:id`、`GET /api/admin/agents`（支持 `?ownerId=` 过滤）— 管理
   - `POST /api/admin/agents/test`、`POST /api/admin/agents/:id/test` — 连接测试
   - `POST /api/admin/agents/validate` — 仅校验 MDL
+  - `GET /api/admin/agents/:id/status` — 运行状态 + 连接池监控
+  - 管理操作（注册/更新/启停/注销）自动写入 `sys_operation_log` 审计
+  - 模板见 `examples/mdl-template.yml`
 - `GET /health` — 健康检查
 
 ## 测试
