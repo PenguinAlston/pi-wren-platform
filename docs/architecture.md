@@ -62,6 +62,9 @@ DataAnalysisAgent（财务 / 保险，按领域配置驱动）
 - `AgentRegistry`：启动加载 + 运行时增删改（无需重启）、单 Agent 失败隔离（status=error）
 - 管理 API（`/api/admin/agents*`，`X-Admin-Token`）：注册/列表/详情/更新/删除/连接测试/MDL 校验
 - 每个自定义 Agent = 独立连接池（max 3、语句超时 15s）+ 独立语义引擎；SQL 白名单自动来自其 MDL
+- 多租户：`owner_id` 归属 + 列表 `?ownerId=` 过滤（RBAC 落地后由登录身份解析）
+- 审计：注册/更新/启停/注销写入 `sys_operation_log`（`PostgresOperationAuditLogger`，失败不阻断业务）
+- 监控：`AgentPoolManager` 按 Agent 统计连接池（total/idle/waiting），更新/注销时 `onDispose` 自动释放
 - 数据流：`parseSemanticConfig(mdl)` → 规则引擎（兜底）+ LLM 动态 SQL → DataAnalysisAgent，与内置 Agent 同一流水线
 
 ### Pi 桥接（services/pi-bridge，方案 A：会话层接入）

@@ -5,7 +5,7 @@
 ## 已完成（2026-08）
 
 ### 工程基础
-- [x] pnpm workspace 重构（`pnpm-workspace.yaml` + `allowBuilds`，8 个 workspace）
+- [x] pnpm workspace 重构（`pnpm-workspace.yaml` + `allowBuilds`，9 个 workspace）
 - [x] 统一的 TypeScript 基础配置（strict + `verbatimModuleSyntax` + `noUncheckedIndexedAccess`）
 - [x] ESLint 9 flat config + Prettier
 - [x] 环境配置：zod 校验 + `.env` 自动加载（dotenv）+ `.env.example`
@@ -30,7 +30,11 @@
 - [x] Express API：健康检查、请求校验、pino 结构化日志、统一错误处理、优雅停机、超时保护
 - [x] Next.js 聊天控制台：多 Agent 切换、结论、轨迹、SQL、结果表、120s 请求超时
 - [x] Next 代理超时修复（`proxyTimeout: 120s`，适配慢速 LLM）
-- [x] Vitest 单元/集成测试（46 个用例）
+- [x] Vitest 单元/集成测试（78 个用例）
+- [x] 自定义 Agent Phase 1：`services/agent-registry` + `sys_agent_config` 表 + 管理 API（注册/列表/详情/更新/删除/连接测试/MDL 校验，`X-Admin-Token` 鉴权，连接串 AES-256-GCM 加密 + 脱敏，错误隔离）
+- [x] 自定义 Agent Phase 2：前端管理页 `/agents`（MDL 粘贴/校验/测试连接/启停/编辑/删除/池监控）+ 示例模板 `examples/mdl-template.yml`
+- [x] 自定义 Agent Phase 3：多租户 `owner_id`（列表过滤）、管理操作审计落库 `sys_operation_log`、连接池监控 `GET /api/admin/agents/:id/status`（更新/注销自动释放池）
+- [x] 生产构建修复：API 由 tsup ESM 改 CJS（pg/yaml 等原生 CJS 依赖在 ESM bundle 运行时报错）；`resolveSemanticFile` 兼容打包后运行
 
 ## 待处理（建议顺序）
 
@@ -55,7 +59,7 @@
 - [x] Agent 注册/发现中心：`/api/admin/agents` 自定义 Agent 注册（MDL + 连接串 + ownerId 多租户 + 连接池监控 + 审计，见 `docs/custom-agent-design.md`）；工作流引擎（多步编排、审批流）待做
 - [ ] 指标定义管理界面（语义模型 CRUD）
 - [ ] 多数据源连接器（BigQuery、Snowflake 等）
-- [ ] 多租户与细粒度数据权限（行级/列级）
+- [~] 多租户：`owner_id` 归属与过滤已完成（基础版）；行级/列级细粒度数据权限与 owner 身份校验待做（当前 owner 由请求方声明）
 - [x] 开源 Pi 会话层接入（SSE 流式 + 会话持久化，已落地，见 `docs/pi-integration-assessment.md`）
 
 ## 架构决策记录

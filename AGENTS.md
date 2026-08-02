@@ -16,9 +16,9 @@ pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 works
 - `packages/agent-sdk` — LLM Provider（OpenAI 兼容 / Anthropic / Ollama / Mock）（`src/providers/`）
 - `packages/shared-types` — 跨服务共享类型（`src/index.ts`）
 - `semantic/` — MDL 式 YAML 语义配置（`finance.mdl.yml`、`insurance.mdl.yml`）：模型/意图/指标/知识
-- `infra/postgres` — 建表与种子数据（`init.sql`、`insurance_schema.sql`、`insurance_seed.sql`）；`docs` — 架构与路线图
+- `infra/postgres` — 建表与种子数据（`insurance_schema.sql`、`insurance_seed.sql`、`agent_config.sql` 自定义 Agent 表、`z_admin_seed.sql` 审计主体）；`examples/mdl-template.yml` — 自定义 Agent 模板；`docs` — 架构与路线图
 
-各部分如何协作：**新增一个 Agent = 新增一段领域配置（`src/agents/domain.ts`）+ 一份语义 YAML，流水线代码零改动**。所有业务依赖均通过构造函数注入，便于测试替换替身。
+各部分如何协作：**新增一个 Agent = 新增一段领域配置（`src/agents/domain.ts`）+ 一份语义 YAML（内置），或通过管理 API/前端页面上传 MDL + 数据库连接串（自定义，`services/agent-registry`），流水线代码零改动**。所有业务依赖均通过构造函数注入，便于测试替换替身。
 
 ## 构建、测试与开发命令
 
@@ -41,7 +41,7 @@ pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 works
 
 - Vitest；测试与源码同目录，命名 `*.test.ts`
 - 按行为命名：`describe('LlmContextEngine')` + `it('falls back when the LLM returns a dangerous statement')`
-- 覆盖：Provider 客户端（mock `fetch`）、SQL 校验、意图匹配、Agent 流水线（注入替身）、API（临时端口集成测试）
+- 覆盖：Provider 客户端（mock `fetch`）、SQL 校验、意图匹配、Agent 流水线（注入替身）、会话持久化（pi jsonl）、注册表/加密/审计、自定义 Agent 管理 API（临时端口集成测试）
 
 ## 提交与 PR 指南
 

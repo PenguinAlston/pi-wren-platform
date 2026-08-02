@@ -1,6 +1,6 @@
 # MVP 进展
 
-> 状态：2026-08-02 更新。MVP 已从"骨架"演进为**可运行的自然语言数据问答平台**，全链路已用真实 LLM（阿里云 DashScope qwen3.7-flash）与真实 PostgreSQL 验证通过。企业级演进清单见 [enterprise-roadmap.md](enterprise-roadmap.md)。
+> 状态：2026-08-02 更新。MVP 已从"骨架"演进为**可运行的自然语言数据问答平台 + 自助式自定义 Agent 平台**，全链路已用真实 LLM（阿里云 DashScope qwen3.7-flash）与真实 PostgreSQL 验证通过。企业级演进清单见 [enterprise-roadmap.md](enterprise-roadmap.md)。
 
 ## 已完成
 
@@ -10,32 +10,54 @@
 - [x] 保险 Agent（保单/理赔/保全/核保/赔付率，22 张生产级表 + 字典中文标签）
 - [x] 规则引擎降级兜底（LLM 不可用或输出不安全时自动切换，查询不中断）
 - [x] 防幻觉提示词（日期/数值逐字照抄，数据缺失如实说明）
+- [x] SQL 安全校验（仅 SELECT/WITH、高危语句拦截、表名白名单自动来自 MDL）
+
+### 会话与流式（方案 A：开源 Pi 会话层）
+- [x] 多轮会话持久化：基于 `@earendil-works/pi-agent-core` jsonl 会话仓库（`data/sessions/`，重启不丢）
+- [x] 续聊历史注入：摘要时自动注入最近 3 轮对话
+- [x] SSE 流式输出：`POST /api/agent/:domain/chat/stream`，前端实时轨迹
+- [x] 压缩决策辅助（pi `shouldCompact`/`estimateTokens`）
+
+### 自定义 Agent（Phase 1-3）
+- [x] 自助注册：`POST /api/admin/agents`（MDL + 数据库连接串），无需改代码/重启
+- [x] 连接串 AES-256-GCM 加密落库、管理面 `X-Admin-Token` 鉴权、列表脱敏
+- [x] 运行时注册表：启动加载 + 动态增删改 + 单 Agent 失败隔离（status=error）
+- [x] 多租户：`owner_id` 归属 + 列表 `?ownerId=` 过滤
+- [x] 管理操作审计落库（`sys_operation_log`，主体 UADMIN，失败不阻断）
+- [x] 连接池监控：`GET /api/admin/agents/:id/status`（total/idle/waiting），更新/注销自动释放
+- [x] 前端管理页 `/agents`：MDL 粘贴、校验、连接测试、启停/编辑/删除、池监控
+- [x] 示例模板 `examples/mdl-template.yml`
 
 ### 平台能力
-- [x] 多 Agent 架构：`DataAnalysisAgent` + 领域配置（domain + semantic YAML）
+- [x] 多 Agent 架构：`DataAnalysisAgent` + 领域配置（内置 domain + 自定义 MDL 两种来源）
 - [x] MDL 式语义引擎（模型/意图/指标/知识，YAML 配置驱动）
-- [x] 前端控制台：Agent 切换、执行轨迹、SQL、结果表
-- [x] API：`/api/agents`、`/api/agent/:domain/chat`、健康检查
-- [x] 工程化：pnpm workspace、strict TS、ESLint/Prettier、Vitest 46 用例、CI、日志、配置校验
+- [x] 前端控制台：Agent 切换、执行轨迹、SQL、结果表、多轮续聊
+- [x] API：`/api/agents`、`/api/agent/:domain/chat`、SSE 流式、自定义 Agent 管理面、健康检查
+- [x] 工程化：pnpm workspace、strict TS、ESLint/Prettier、Vitest 78 用例、CI、pino 日志、zod 配置
+- [x] 生产构建：tsup CJS 单文件（修复 pg/yaml 等原生 CJS 依赖在 ESM bundle 的运行时错误）
 
 ## 目标流程（已实现）
 
 ```
 用户中文提问
  │
-Web Chat → Express API
+Web Chat（:3000）→ Express API（:8080）
  │
-DataAnalysisAgent（领域配置驱动）
+DataAnalysisAgent（内置 财务/保险 + 自定义 Agent 注册表）
  │
-语义层（LLM 动态 SQL / 规则引擎兜底）→ 安全校验
+语义层（LLM 动态 SQL / 规则引擎兜底）→ 安全校验（表名白名单）
  │
-PostgreSQL（财务 + 保险 23 张表）
+PostgreSQL（内置 23 张表 + 自定义 Agent 独立连接池）
  │
-结果分析 → LLM 摘要 → 回答 + 轨迹 + SQL + 结果表
+结果分析 → LLM 摘要（历史注入）→ SSE 实时轨迹 + 回答 + SQL + 结果表
+ │
+会话 jsonl 持久化（pi）+ 管理操作审计（sys_operation_log）
 ```
 
 ## 遗留项（详见路线图）
 
-- 认证/RBAC、审计落库、SQL 执行层硬约束、会话持久化、流式输出、图表可视化
+- 认证/RBAC（当前管理面用轻量 `X-Admin-Token`）
+- AI 问答/传统查询的审计接入（当前仅自定义 Agent 管理操作）
+- SQL 执行层硬约束（只读事务、行数上限）
 - 传统业务查询界面（契约/保全/理赔条件组合查询 + 分页导出）
-- 混合路由提速（常见问题 <1s）、生产部署
+- 混合路由提速（常见问题 <1s）、LLM 摘要 token 级流式、生产部署（Dockerfile）
