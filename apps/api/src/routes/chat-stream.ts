@@ -6,7 +6,11 @@ import type { Logger } from '../logger';
 
 const streamRequestSchema = z.object({
   message: z.string().trim().min(1, 'message is required').max(4000, 'message too long'),
-  sessionId: z.string().trim().min(1).max(128).optional(),
+  sessionId: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/, 'sessionId 只允许字母/数字/下划线/连字符')
+      .optional(),
 });
 
 /**

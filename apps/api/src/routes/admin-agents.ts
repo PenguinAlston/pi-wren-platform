@@ -166,23 +166,22 @@ export function updateAdminAgentHandler(deps: ApiDeps) {
     const agentId = req.params.agentId as string;
     try {
       const before = await registry.getRecord(agentId);
-      const instance = await registry.update(agentId, {
-        ...patch,
-        ...(db ? { db: normalizeDb(db) } : {}),
-      });
-      if (!instance) {
+      if (!before) {
         res.status(404).json({ error: `agent not found: ${agentId}` });
         return;
       }
-      const operType =
-        before && patch.status && patch.status !== before.status ? 'agent_status' : 'agent_update';
+      await registry.update(agentId, {
+        ...patch,
+        ...(db ? { db: normalizeDb(db) } : {}),
+      });
+      const operType = patch.status && patch.status !== before.status ? 'agent_status' : 'agent_update';
       await deps.audit?.log({
         operType,
-        operContent: `${operType === 'agent_status' ? '变更状态' : '更新配置'}：${agentId}（${instance.label}）`,
+        operContent: `${operType === 'agent_status' ? '变更状态' : '更新配置'}：${agentId}（${before.name}）`,
         sqlContent: patch.mdl ? `mdl=${patch.mdl.length} chars` : undefined,
         ipAddress: req.ip,
       });
-      res.json({ agent: { id: instance.id, label: instance.label, source: 'custom' } });
+      res.json({ agent: { id: agentId, label: before.label, source: 'custom' } });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       res.status(400).json({ error: message });

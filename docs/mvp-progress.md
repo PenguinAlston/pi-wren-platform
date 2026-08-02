@@ -10,7 +10,7 @@
 - [x] 保险 Agent（保单/理赔/保全/核保/赔付率，22 张生产级表 + 字典中文标签）
 - [x] 规则引擎降级兜底（LLM 不可用或输出不安全时自动切换，查询不中断）
 - [x] 防幻觉提示词（日期/数值逐字照抄，数据缺失如实说明）
-- [x] SQL 安全校验（仅 SELECT/WITH、高危语句拦截、表名白名单自动来自 MDL）
+- [x] SQL 安全校验（统一关口 `database_query`：字符串/注释防绕过、危险函数拦截、表名白名单自动来自 MDL；LLM/规则/Wren/自定义 Agent 全路径生效）
 
 ### 会话与流式（方案 A：开源 Pi 会话层）
 - [x] 多轮会话持久化：基于 `@earendil-works/pi-agent-core` jsonl 会话仓库（`data/sessions/`，重启不丢）
@@ -33,7 +33,7 @@
 - [x] MDL 式语义引擎（模型/意图/指标/知识，YAML 配置驱动）
 - [x] 前端控制台：Agent 切换、执行轨迹、SQL、结果表、多轮续聊
 - [x] API：`/api/agents`、`/api/agent/:domain/chat`、SSE 流式、自定义 Agent 管理面、健康检查
-- [x] 工程化：pnpm workspace、strict TS、ESLint/Prettier、Vitest 78 用例、CI、pino 日志、zod 配置
+- [x] 工程化：pnpm workspace、strict TS、ESLint/Prettier、Vitest 92 用例、CI、pino 日志（敏感头脱敏）、zod 配置
 - [x] 生产构建：tsup CJS 单文件（修复 pg/yaml 等原生 CJS 依赖在 ESM bundle 的运行时错误）
 
 ## 目标流程（已实现）
@@ -58,6 +58,6 @@ PostgreSQL（内置 23 张表 + 自定义 Agent 独立连接池）
 
 - 认证/RBAC（当前管理面用轻量 `X-Admin-Token`）
 - AI 问答/传统查询的审计接入（当前仅自定义 Agent 管理操作）
-- SQL 执行层硬约束（只读事务、行数上限）
+- 行级/列级数据权限（只读事务/语句超时/行数上限已完成）
 - 传统业务查询界面（契约/保全/理赔条件组合查询 + 分页导出）
 - 混合路由提速（常见问题 <1s）、LLM 摘要 token 级流式、生产部署（Dockerfile）

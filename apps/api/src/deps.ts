@@ -26,6 +26,7 @@ import {
   loadSemanticConfig,
   resolveSemanticFile,
   type ContextEngine,
+  type SemanticConfig,
 } from '@pi-wren/context-engine';
 import { createDefaultSqlExecutor, createPool, type SqlExecutor } from '@pi-wren/data-engine';
 import { PiSessionStore } from '@pi-wren/pi-bridge';
@@ -81,13 +82,19 @@ function buildModel(config: ApiConfig): ModelProvider | undefined {
   });
 }
 
+interface BuiltContext {
+  context: ContextEngine;
+  /** 本地语义配置（供 database_query 做表名白名单校验）；Wren 路径无。 */
+  semanticConfig?: SemanticConfig;
+}
+
 function buildContext(
   config: ApiConfig,
   semanticFile: string,
   model?: ModelProvider,
-): ContextEngine {
+): BuiltContext {
   if (config.WREN_URL) {
-    return new WrenContextEngine({ endpoint: config.WREN_URL, token: config.WREN_TOKEN });
+    return { context: new WrenContextEngine({ endpoint: config.WREN_URL, token: config.WREN_TOKEN }) };
   }
   const path = config.SEMANTIC_DIR
     ? join(config.SEMANTIC_DIR, semanticFile)
@@ -95,9 +102,10 @@ function buildContext(
   const semanticConfig = loadSemanticConfig(path);
   const configEngine = new ConfigDrivenContextEngine(semanticConfig);
   // 配置了真实 LLM 时启用动态 SQL 生成，规则引擎作为降级兜底
-  return model
+  const context = model
     ? new LlmContextEngine({ model, config: semanticConfig, fallback: configEngine })
     : configEngine;
+  return { context, semanticConfig };
 }
 
 async function buildBuiltinAgents(
@@ -107,9 +115,9 @@ async function buildBuiltinAgents(
 ): Promise<AgentSpec[]> {
   const agents: AgentSpec[] = [];
   for (const { domain, semanticFile } of DOMAINS) {
-    const context = buildContext(config, semanticFile, model);
+    const { context, semanticConfig } = buildContext(config, semanticFile, model);
     const sql: SqlExecutor = createDefaultSqlExecutor();
-    const tools = createDataAnalysisTools(context, sql);
+    const tools = createDataAnalysisTools(context, sql, semanticConfig);
     const agent = new DataAnalysisAgent({ domain, context, sql, tools, model, memory });
     agents.push({
       id: domain.id,

@@ -56,12 +56,18 @@ export class AgentRegistry<T extends { id: string }> {
     }
     const full: CustomAgentConfig = { ...config, status: 'enabled' };
     const instance = await this.opts.factory.build(full); // 失败则抛错，不落库
-    await this.opts.store.create(this.toRecord(full));
+    try {
+      await this.opts.store.create(this.toRecord(full));
+    } catch (error) {
+      // 落库失败：释放已构建实例的资源（连接池），避免泄漏
+      await this.opts.onDispose?.(config.agentId);
+      throw error;
+    }
     this.agents.set(config.agentId, instance);
     return instance;
   }
 
-  /** 更新配置：新配置构建成功后才替换实例，失败保留旧实例。 */
+  /** 更新配置：新配置构建成功后才替换实例，失败保留旧实例；停用/无配置变更时不重建。 */
   async update(agentId: string, patch: Partial<Omit<CustomAgentConfig, 'agentId'>>): Promise<T | undefined> {
     const record = await this.opts.store.findByAgentId(agentId);
     if (!record) return undefined;
@@ -73,6 +79,36 @@ export class AgentRegistry<T extends { id: string }> {
       db: patch.db ?? current.db,
       status: patch.status ?? current.status,
     };
+    const hasConfigChange =
+      patch.mdl !== undefined ||
+      patch.db !== undefined ||
+      patch.name !== undefined ||
+      patch.label !== undefined ||
+      patch.description !== undefined ||
+      patch.systemPrompt !== undefined;
+
+    if (merged.status === 'disabled' || !hasConfigChange) {
+      // 停用（即使 MDL 已坏也能停用）或状态未变：不重建实例
+      await this.opts.store.update(agentId, {
+        ...(patch.name !== undefined ? { name: merged.name } : {}),
+        ...(patch.label !== undefined ? { label: merged.label } : {}),
+        ...(patch.description !== undefined ? { description: merged.description ?? null } : {}),
+        ...(patch.systemPrompt !== undefined ? { systemPrompt: merged.systemPrompt ?? null } : {}),
+        ...(patch.mdl !== undefined ? { mdl: merged.mdl } : {}),
+        ...(patch.db !== undefined ? { dbConnectionEnc: this.encryptDb(merged.db) } : {}),
+        status: merged.status,
+        lastError: null,
+        ...(patch.ownerId !== undefined ? { ownerId: merged.ownerId ?? null } : {}),
+      });
+      if (merged.status === 'disabled') {
+        this.agents.delete(agentId);
+        await this.opts.onDispose?.(agentId);
+        return undefined;
+      }
+      return this.agents.get(agentId);
+    }
+
+    // 有配置变更且目标为 enabled：先构建成功再替换
     const instance = await this.opts.factory.build(merged); // 失败抛错，旧实例不受影响
     await this.opts.store.update(agentId, {
       name: merged.name,
@@ -85,14 +121,9 @@ export class AgentRegistry<T extends { id: string }> {
       lastError: null,
       ownerId: merged.ownerId ?? null,
     });
-    if (merged.status === 'enabled') {
-      const previous = this.agents.get(agentId);
-      this.agents.set(agentId, instance);
-      if (previous && previous !== instance) {
-        await this.opts.onDispose?.(agentId);
-      }
-    } else {
-      this.agents.delete(agentId);
+    const previous = this.agents.get(agentId);
+    this.agents.set(agentId, instance);
+    if (previous && previous !== instance) {
       await this.opts.onDispose?.(agentId);
     }
     return instance;

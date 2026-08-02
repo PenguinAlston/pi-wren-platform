@@ -26,7 +26,7 @@ pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 works
 
 - `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `pnpm-workspace.yaml` 的 `allowBuilds`）
 - `pnpm dev` — 并行启动 API（:8080）与 Web（:3000）。**不要在 dev 运行时执行 `pnpm build`**（两者共用 `.next` 缓存会冲突）
-- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（78 个用例；API 集成测试需可监听本地端口）
+- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（92 个用例；API 集成测试需可监听本地端口）
 - `docker compose up -d` — 启动 PostgreSQL/Redis（使用本机镜像，见 `docker-compose.yml`）
 - 配置：在仓库根创建 `.env`（参考 `.env.example`），API 通过 dotenv 自动加载；`LLM_PROVIDER`（`mock|openai|anthropic|ollama`）切换离线规则模式与 LLM 动态 SQL 模式；`SESSION_DIR` 可覆盖会话存储目录（默认 `data/sessions`，已 gitignore）；`ADMIN_TOKEN`（管理面鉴权）+ `AGENT_SECRET_KEY`（连接串加密密钥，配置后才启用自定义 Agent）
 

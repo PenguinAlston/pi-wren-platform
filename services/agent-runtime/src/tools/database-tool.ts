@@ -1,14 +1,23 @@
 import type { QueryResult } from '@pi-wren/shared-types';
 import type { SqlExecutor } from '@pi-wren/data-engine';
+import type { SemanticConfig } from '@pi-wren/context-engine';
+import { parseAndValidateSql } from '../context/sql-validation';
 import type { AgentTool } from './registry';
 
-/** Executes a generated SQL statement against the data engine. */
-export function createDatabaseTool(sqlExecutor: SqlExecutor): AgentTool<string, QueryResult> {
+/**
+ * 执行生成的 SQL 语句。所有来源的 SQL（LLM/规则引擎/Wren/自定义 Agent 意图）
+ * 都汇聚到该工具执行，因此在此处做统一的安全校验（唯一执行关口）。
+ */
+export function createDatabaseTool(
+  sqlExecutor: SqlExecutor,
+  semanticConfig?: SemanticConfig,
+): AgentTool<string, QueryResult> {
   return {
     name: 'database_query',
     description: 'Execute a read-only SQL query against the enterprise database',
     async execute(sql) {
-      return sqlExecutor.query(sql);
+      const validated = parseAndValidateSql(sql, semanticConfig);
+      return sqlExecutor.query(validated);
     },
   };
 }

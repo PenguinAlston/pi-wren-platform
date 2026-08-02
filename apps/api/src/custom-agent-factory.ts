@@ -39,7 +39,7 @@ export function createCustomAgentFactory(deps: {
       const context = deps.model
         ? new LlmContextEngine({ model: deps.model, config: semantic, fallback: configEngine })
         : configEngine;
-      const tools = createDataAnalysisTools(context, sql);
+      const tools = createDataAnalysisTools(context, sql, semantic);
       const domain: AgentDomainConfig = {
         id: config.agentId,
         label: config.label,

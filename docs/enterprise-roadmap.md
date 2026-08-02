@@ -15,7 +15,7 @@
 ### 运行时能力
 - [x] 真实 LLM Provider：OpenAI 兼容（已接入阿里云 DashScope qwen3.7-flash）、Anthropic、Ollama + 离线 Mock
 - [x] LLM 动态 SQL 生成（`LlmContextEngine`）：提示词注入表结构/业务知识/示例意图
-- [x] SQL 安全校验（`sql-validation`）：仅 SELECT/WITH、拦截高危语句、单语句、表名白名单
+- [x] SQL 安全校验（`sql-validation`）：统一关口（database_query）+ 字符串/注释防绕过 + 危险函数拦截 + 表名白名单（LLM/规则/Wren/自定义 Agent 全路径生效）
 - [x] 失败自动降级：LLM 不可用/输出不安全 → 规则引擎兜底，查询永不中断
 - [x] 防幻觉提示词：日期/数值逐字照抄，查不到的字段如实说明"未包含"
 - [x] MDL 式语义引擎（`semantic/*.mdl.yml`：模型/意图/指标/知识，关键词评分匹配）
@@ -30,7 +30,7 @@
 - [x] Express API：健康检查、请求校验、pino 结构化日志、统一错误处理、优雅停机、超时保护
 - [x] Next.js 聊天控制台：多 Agent 切换、结论、轨迹、SQL、结果表、120s 请求超时
 - [x] Next 代理超时修复（`proxyTimeout: 120s`，适配慢速 LLM）
-- [x] Vitest 单元/集成测试（78 个用例）
+- [x] Vitest 单元/集成测试（92 个用例）
 - [x] 自定义 Agent Phase 1：`services/agent-registry` + `sys_agent_config` 表 + 管理 API（注册/列表/详情/更新/删除/连接测试/MDL 校验，`X-Admin-Token` 鉴权，连接串 AES-256-GCM 加密 + 脱敏，错误隔离）
 - [x] 自定义 Agent Phase 2：前端管理页 `/agents`（MDL 粘贴/校验/测试连接/启停/编辑/删除/池监控）+ 示例模板 `examples/mdl-template.yml`
 - [x] 自定义 Agent Phase 3：多租户 `owner_id`（列表过滤）、管理操作审计落库 `sys_operation_log`、连接池监控 `GET /api/admin/agents/:id/status`（更新/注销自动释放池）
@@ -40,7 +40,7 @@
 
 ### P1 — 上线前必做
 - [ ] 身份认证与授权（API key / JWT / RBAC），目前 chat 路由完全开放
-- [ ] SQL 执行硬约束（数据库层只读事务、行数上限、超时）——生成层已有校验，执行层待加固
+- [~] SQL 执行硬约束：数据库层只读事务（`default_transaction_read_only`）+ 语句超时 + 行数上限已落地；行级/列级数据权限待做
 - [x] 会话记忆持久化（基于开源 Pi jsonl 落盘，`data/sessions/`；Redis/多实例共享可后续替换）
 - [~] 审计日志落库：自定义 Agent 管理操作已写入 `sys_operation_log`（注册/更新/启停/注销）；AI 问答/传统查询审计待接
 - [~] LLM 流式输出：执行事件 SSE 已完成（`/chat/stream`）；LLM 摘要 token 级流式待做

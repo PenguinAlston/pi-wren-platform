@@ -8,13 +8,17 @@ export interface SqlExecutor {
 }
 
 export class PostgresSqlExecutor implements SqlExecutor {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    /** 返回行数上限，防止无 LIMIT 查询把海量结果灌入内存/上下文。 */
+    private readonly maxRows = 1_000,
+  ) {}
 
   async query(sql: string): Promise<QueryResult> {
     try {
       const result = await this.pool.query(sql);
       return {
-        rows: result.rows as Record<string, unknown>[],
+        rows: (result.rows as Record<string, unknown>[]).slice(0, this.maxRows),
         count: result.rowCount,
       };
     } catch (error) {
@@ -24,6 +28,9 @@ export class PostgresSqlExecutor implements SqlExecutor {
   }
 }
 
+/** 平台默认查询执行器：只读事务 + 30s 语句超时（内置 Agent 与注册表写入共用不同池）。 */
 export function createDefaultSqlExecutor(): SqlExecutor {
-  return new PostgresSqlExecutor(createPool());
+  return new PostgresSqlExecutor(
+    createPool({ readOnly: true, statementTimeoutMillis: 30_000 }),
+  );
 }

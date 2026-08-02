@@ -25,6 +25,7 @@ export class AgentPoolManager {
       max: db.max ?? 3,
       connectionTimeoutMillis: 5_000,
       statementTimeoutMillis: 15_000,
+      readOnly: true, // 数据库层强制只读，即使校验器被绕过也无法写数据
     });
     this.pools.set(agentId, pool);
     return pool;

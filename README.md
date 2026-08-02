@@ -46,7 +46,7 @@ Web (:3000) ──/api 代理──►  Express API (:8080)
 DataAnalysisAgent（领域配置驱动：内置 财务/保险 + 自定义）
  │
  ├─ 语义层 ContextEngine：LlmContextEngine（LLM 动态 SQL）⇄ ConfigDrivenContextEngine（规则兜底）
- │    └─ 安全校验 sql-validation：仅 SELECT/WITH、高危拦截、表名白名单（来自 MDL）
+ │    └─ 安全校验 sql-validation：统一关口 + 去注释/危险函数拦截 + 表名白名单（来自 MDL）
  ├─ Agent Tools：wren_generate_sql / database_query / result_analysis / wren_search_knowledge / llm_summarize
  │
  └─ 数据引擎 SqlExecutor → PostgreSQL（内置表 + 自定义 Agent 独立连接池）
@@ -78,7 +78,7 @@ pnpm dev          # 并行启动所有 workspace（开发模式）
 pnpm build        # 构建所有 workspace（API 打包 + Web 静态构建）
 pnpm lint         # ESLint 检查
 pnpm typecheck    # TypeScript 类型检查
-pnpm test         # Vitest 单元/集成测试（78 个用例）
+pnpm test         # Vitest 单元/集成测试（92 个用例）
 ```
 
 ## 项目结构
@@ -119,7 +119,7 @@ docs/               架构、进展、路线图与设计文档
 
 ## 测试
 
-78 个 Vitest 用例：LLM Provider、SQL 校验、意图匹配、Agent 流水线、会话持久化、注册表/加密/审计、自定义 Agent 管理 API 集成（端口监听需本机授权）。
+92 个 Vitest 用例：LLM Provider、SQL 校验（含对抗性用例）、意图匹配、Agent 流水线、会话持久化、注册表/加密/审计、自定义 Agent 管理 API 集成（端口监听需本机授权）。
 
 ## 文档导航
 

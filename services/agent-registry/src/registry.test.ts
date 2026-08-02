@@ -194,3 +194,45 @@ describe('AgentRegistry resource disposal', () => {
     expect(disposed).toEqual(['erp']);
   });
 });
+
+describe('AgentRegistry disable & resource cleanup', () => {
+  it('can disable a broken agent without rebuilding (skip factory.build)', async () => {
+    let builds = 0;
+    const registry = new AgentRegistry<FakeSpec>({
+      store: new InMemoryAgentConfigStore(),
+      factory: {
+        async build(config) {
+          builds += 1;
+          return { id: config.agentId, label: config.label };
+        },
+      },
+      secretKey: SECRET,
+      onDispose: () => undefined,
+    });
+    // 先注册成功，再手动把配置标记为 error（模拟 loadAll 构建失败后的状态）
+    await registry.register(makeConfig('erp'));
+    const store = registry['opts'].store as InMemoryAgentConfigStore;
+    await store.update('erp', { status: 'error', lastError: 'build failed' });
+    // 停用不应触发 build（即使配置已坏也能停用）
+    const before = builds;
+    await expect(registry.setStatus('erp', 'disabled')).resolves.toBeUndefined();
+    expect(builds).toBe(before);
+  });
+
+  it('disposes the pool when store.create fails during register', async () => {
+    const disposed: string[] = [];
+    const store = new InMemoryAgentConfigStore();
+    store.create = async () => {
+      throw new Error('insert failed');
+    };
+    const registry = new AgentRegistry<FakeSpec>({
+      store,
+      factory: { async build(config) { return { id: config.agentId, label: config.label }; } },
+      secretKey: SECRET,
+      onDispose: (agentId) => void disposed.push(agentId),
+    });
+    await expect(registry.register(makeConfig('erp'))).rejects.toThrow(/insert failed/);
+    expect(disposed).toEqual(['erp']);
+    expect(registry.list()).toHaveLength(0);
+  });
+});

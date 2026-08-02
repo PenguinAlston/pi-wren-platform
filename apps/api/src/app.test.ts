@@ -369,3 +369,23 @@ describe('admin agents api', () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe('api sessionId hardening', () => {
+  it('rejects path-traversal sessionId in JSON chat', async () => {
+    const response = await fetch(`${baseUrl}/api/agent/finance/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'hi', sessionId: '../../pwned' }),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects path-traversal sessionId in SSE stream chat', async () => {
+    const response = await fetch(`${baseUrl}/api/agent/finance/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'hi', sessionId: '../../pwned' }),
+    });
+    expect(response.status).toBe(400);
+  });
+});

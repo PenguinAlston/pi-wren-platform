@@ -94,3 +94,20 @@ describe('SSE formatting', () => {
     expect(done).toContain('"sessionId":"s-1"');
   });
 });
+
+describe('PiSessionStore sessionId hardening', () => {
+  it('rejects path-traversal session ids on save', async () => {
+    const store = new PiSessionStore({ cwd: tempDir, sessionsRoot: join(tempDir, 'sessions') });
+    await expect(
+      store.save(record('../../etc/pwned', 'q', 'a', '2026-08-02T10:00:00.000Z')),
+    ).rejects.toThrow(/invalid sessionId/);
+    await expect(
+      store.save(record('a/b', 'q', 'a', '2026-08-02T10:00:00.000Z')),
+    ).rejects.toThrow(/invalid sessionId/);
+  });
+
+  it('getHistory ignores invalid session ids', async () => {
+    const store = new PiSessionStore({ cwd: tempDir, sessionsRoot: join(tempDir, 'sessions') });
+    expect(await store.getHistory('../../evil')).toEqual([]);
+  });
+});

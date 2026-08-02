@@ -36,9 +36,11 @@ function isCodeLikeColumn(name: string): boolean {
 function isPeriodColumn(name: string): boolean {
   const n = name.toLowerCase();
   return (
-    /^(quarter|month|year|week|date|period|季度|月份|年份|日期|期间)/.test(n) ||
-    /^q[1-4]$/.test(n) ||
-    /^\d{4}$/.test(n)
+    // 整词匹配，避免 year_premium、date_of_birth 等含前缀字段被误判为时间列
+    /^(quarter|month|year|week|date|period|q[1-4]|季度|月份|年份|日期|期间)$/.test(n) ||
+    /^(20\d{2}|19\d{2})[_-]?q[1-4]$/.test(n) || // 2024q1 / 2024-Q1
+    /^\d{4}$/.test(n) || // 2024
+    /^\d{4}[_-]\d{1,2}$/.test(n) // 2024-05
   );
 }
 

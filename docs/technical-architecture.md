@@ -67,7 +67,7 @@ flowchart TB
 用户提问"王大力都有哪些保单？"
  → ① plan：Agent 生成执行计划
  → ② 语义层生成 SQL（LLM 注入表结构/知识/示例；失败降级规则引擎）
- → ③ SQL 安全校验（仅 SELECT/WITH、拦截高危语句、表名白名单）
+ → ③ SQL 安全校验（database_query 统一关口：去注释/危险函数拦截/表名白名单）
  → ④ PostgreSQL 执行（连接池）
  → ⑤ 结果分析（分组占比/环比）
  → ⑥ LLM 防幻觉摘要（日期/数值逐字照抄，缺失字段声明"未包含"）
@@ -77,7 +77,7 @@ flowchart TB
 ## 四、关键机制与技术选型
 
 - **确定性流水线优先**：LLM 只做"SQL 生成"和"摘要"两个受控步骤，工具编排固定，**不引入 LLM 自由循环**（接入开源 Pi 时的核心架构决策）
-- **安全三层**：生成层（只读约束）→ 校验层（`sql-validation`）→ 执行层（连接池；硬约束待加固）
+- **安全三层**：生成层（只读约束）→ 校验层（`sql-validation`，database_query 统一关口：字符串占位/注释剥离/危险函数拦截/表名白名单）→ 执行层（数据库层只读事务 `default_transaction_read_only`、语句超时、行数上限）
 - **多轮会话**：基于开源 Pi `JsonlSessionRepo` 落盘 `data/sessions/`，重启不丢；摘要注入最近 3 轮历史
 - **流式输出**：`POST /api/agent/:domain/chat/stream`（SSE + 心跳）；前端实时渲染执行轨迹
 - **自定义 Agent**：用户提交 MDL + 数据库连接串即注册（`/api/admin/agents`）；连接串 AES-256-GCM 加密、表名白名单自动来自其 MDL、独立连接池（max 3/15s 超时）
@@ -85,7 +85,7 @@ flowchart TB
 - **连接池监控**：`AgentPoolManager` 按 Agent 统计 total/idle/waiting，更新/注销时自动释放
 - **生产构建**：tsup **CJS 单文件**（ESM bundle 无法兼容 pg/yaml 等原生 CJS 依赖，此为既有隐患的修复）
 - **运行依赖**：PostgreSQL（bitnami 镜像，`demo/demo`）、Redis（预留）、DashScope qwen3.7-flash（OpenAI 兼容）
-- **质量**：Vitest 55 用例（Provider/校验/意图/Agent 流水线/API 集成/会话存储）、GitHub CI、lint/typecheck 全绿
+- **质量**：Vitest 92 用例（含 SQL 校验对抗性用例、会话存储、注册表/审计、管理 API 集成）、GitHub CI、lint/typecheck 全绿
 
 ## 五、当前边界与演进方向
 

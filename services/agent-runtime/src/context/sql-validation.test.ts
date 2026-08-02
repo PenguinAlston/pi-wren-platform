@@ -51,3 +51,48 @@ describe('parseAndValidateSql', () => {
     expect(() => parseAndValidateSql('SELECT * FROM users', config)).toThrow(/未声明表/);
   });
 });
+
+describe('parseAndValidateSql adversarial cases', () => {
+  it('blocks comment-obfuscated DML keywords', () => {
+    // PostgreSQL 将 /* */ 视为空白，DEL/**/ETE 即 DELETE
+    const evil = 'WITH x AS (DEL/**/ETE FROM ins_policy_main RETURNING *) SELECT * FROM x';
+    expect(() => parseAndValidateSql(evil, config)).toThrow(/高危/);
+    expect(() => parseAndValidateSql('INS/**/ERT INTO ins_policy_main VALUES (1)', config)).toThrow(/高危/);
+  });
+
+  it('blocks line-comment obfuscation', () => {
+    expect(() => parseAndValidateSql('SELECT 1 -- note\nDELETE FROM ins_policy_main', config)).toThrow(/高危/);
+  });
+
+  it('blocks dangerous functions (DoS / file access / backend control)', () => {
+    expect(() => parseAndValidateSql('SELECT pg_sleep(3600)', config)).toThrow(/危险函数/);
+    expect(() => parseAndValidateSql("SELECT pg_read_file('/etc/passwd')", config)).toThrow(/危险函数/);
+    expect(() => parseAndValidateSql('SELECT pg_terminate_backend(42)', config)).toThrow(/危险函数/);
+    expect(() => parseAndValidateSql('SELECT pg_advisory_lock(1)', config)).toThrow(/危险函数/);
+  });
+
+  it('allows keywords and semicolons inside string literals (no false positives)', () => {
+    const sql = "SELECT * FROM ins_policy_main WHERE note = 'delete request; drop me'";
+    expect(() => parseAndValidateSql(sql, config)).not.toThrow();
+  });
+
+  it('allows dollar-quoted string content (it is a literal, not executed)', () => {
+    expect(() => parseAndValidateSql('SELECT $$delete from ins_policy_main$$', config)).not.toThrow();
+  });
+
+  it('blocks multi-statement even with string-embedded semicolons', () => {
+    expect(() => parseAndValidateSql("SELECT 1; SELECT * FROM ins_policy_main", config)).toThrow(/多条/);
+  });
+
+  it('skips table whitelist when config is absent but still blocks dangerous SQL', () => {
+    // Wren 路径等无本地语义配置：保留 SELECT/危险检查，不校验表名
+    expect(parseAndValidateSql('SELECT * FROM any_table', undefined)).toContain('SELECT');
+    expect(() => parseAndValidateSql('DROP TABLE any_table', undefined)).toThrow(/高危/);
+    expect(() => parseAndValidateSql('SELECT pg_sleep(1)', undefined)).toThrow(/危险函数/);
+  });
+
+  it('still enforces table whitelist for string-comment injected references', () => {
+    expect(() => parseAndValidateSql("SELECT 1 -- FROM users\n", config)).not.toThrow(); // 注释内的表名不影响
+    expect(() => parseAndValidateSql('SELECT * FROM users', config)).toThrow(/未声明表/);
+  });
+});
