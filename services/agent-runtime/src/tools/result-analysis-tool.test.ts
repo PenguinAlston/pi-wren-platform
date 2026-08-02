@@ -64,3 +64,31 @@ describe('analyzeQueryResult', () => {
     expect(result.summary).toContain('未返回任何数据');
   });
 });
+
+describe('analyzeQueryResult policy detail rows (P2)', () => {
+  it('formats policy detail rows as readable line items', () => {
+    const result = analyzeQueryResult(
+      [
+        {
+          policy_no: 'P20240002',
+          insured_name: '刘美玲',
+          end_date: '2025-03-31',
+          term_type: '到期',
+        },
+        {
+          policy_no: 'P20240011',
+          insured_name: '周建军',
+          end_date: '2025-01-31',
+          term_type: '已终止',
+        },
+      ],
+      '2025终止的保单有哪些',
+    );
+
+    expect(result.summary).toContain('2 条保单明细');
+    expect(result.summary).toContain('P20240002（被保人：刘美玲');
+    expect(result.summary).toContain('终止日期：2025-03-31');
+    expect(result.summary).toContain('P20240011（被保人：周建军');
+    expect(result.summary).toContain('口径：已终止');
+  });
+});

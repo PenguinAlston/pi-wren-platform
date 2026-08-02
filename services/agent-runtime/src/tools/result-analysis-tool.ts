@@ -78,20 +78,60 @@ function buildShareObservations(
     const second = ranked[1];
     if (top) {
       const share = (top.value / total) * 100;
-      observations.push(`${top.label} 的 ${column} 最高（${top.value.toFixed(0)}，占比 ${share.toFixed(1)}%）`);
+      observations.push(
+        `${top.label} 的 ${column} 最高（${top.value.toFixed(0)}，占比 ${share.toFixed(1)}%）`,
+      );
     }
     if (second && second.value > 0) {
       const gap = ((top?.value ?? 0) - second.value) / (top?.value ?? 1);
       if (gap > 0.5) {
-        observations.push(`${top?.label} 的 ${column} 显著高于第二名 ${second.label}（高出 ${(gap * 100).toFixed(0)}%）`);
+        observations.push(
+          `${top?.label} 的 ${column} 显著高于第二名 ${second.label}（高出 ${(gap * 100).toFixed(0)}%）`,
+        );
       }
     }
   }
   return observations;
 }
 
+/** 明细行展示上限：避免超大结果集把提示词/回答撑爆。 */
+const DETAIL_LINE_LIMIT = 50;
+
+/** 保单明细类结果：逐条格式化为可读清单（保单号 + 被保人姓名 + 关键日期/状态）。 */
+function formatPolicyDetailRows(rows: Record<string, unknown>[]): string | undefined {
+  const firstRow = rows[0] ?? {};
+  const policyNoKey = Object.keys(firstRow).find((key) =>
+    /^(policy_no|policyno|policy_number)$/i.test(key),
+  );
+  const nameKey = Object.keys(firstRow).find((key) =>
+    /^(insured_name|customer_name|insuredname|customername)$/i.test(key),
+  );
+  if (!policyNoKey || !nameKey) {
+    return undefined;
+  }
+  const lines = rows.slice(0, DETAIL_LINE_LIMIT).map((row) => {
+    const parts = [`被保人：${String(row[nameKey] ?? '未知')}`];
+    if (row['end_date'] !== undefined && row['end_date'] !== null) {
+      parts.push(`终止日期：${String(row['end_date'])}`);
+    }
+    if (row['surrender_date'] !== undefined && row['surrender_date'] !== null) {
+      parts.push(`退保/终止日期：${String(row['surrender_date'])}`);
+    }
+    if (row['term_type'] !== undefined && row['term_type'] !== null) {
+      parts.push(`口径：${String(row['term_type'])}`);
+    }
+    if (row['policy_status'] !== undefined && row['policy_status'] !== null) {
+      parts.push(`状态：${String(row['policy_status'])}`);
+    }
+    return `${String(row[policyNoKey])}（${parts.join('，')}）`;
+  });
+  const suffix = rows.length > DETAIL_LINE_LIMIT ? `（仅展示前 ${DETAIL_LINE_LIMIT} 条）` : '';
+  return `查询返回 ${rows.length} 条保单明细：${lines.join('；')}${suffix}`;
+}
+
 /**
  * 通用查询结果分析：
+ * - 保单明细类结果 → 逐条格式化清单；
  * - 含时间列 → 逐期环比变化观察；
  * - 分组数据（无时间列） → 占比 / 排名观察；
  * - 始终返回行数摘要。
@@ -102,6 +142,11 @@ export function analyzeQueryResult(
 ): AnalysisResult {
   if (rows.length === 0) {
     return { summary: '查询未返回任何数据。', observations: [], table: [] };
+  }
+
+  const detailSummary = formatPolicyDetailRows(rows);
+  if (detailSummary) {
+    return { summary: detailSummary, observations: [detailSummary], table: rows };
   }
 
   const observations: string[] = [];

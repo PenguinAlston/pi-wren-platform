@@ -49,3 +49,62 @@ intents:
     expect(() => parseSemanticConfig(bad, 'bad.yml')).toThrow(/intents/);
   });
 });
+
+describe('parseSemanticConfig detail intent metadata', () => {
+  it('parses kind / params / yearFallback', () => {
+    const config = parseSemanticConfig(
+      `
+name: test
+models:
+  - { name: m, table: t }
+intents:
+  - name: expiry
+    keywords: [到期]
+    kind: detail
+    params: [year]
+    yearFallback: 'p.end_date IS NOT NULL'
+    sql: SELECT * FROM t WHERE 1=1 AND {year};
+metrics: []
+`,
+      'detail.yml',
+    );
+
+    expect(config.intents[0]?.kind).toBe('detail');
+    expect(config.intents[0]?.params).toEqual(['year']);
+    expect(config.intents[0]?.yearFallback).toBe('p.end_date IS NOT NULL');
+  });
+
+  it('defaults kind to aggregate and rejects unknown kinds', () => {
+    const config = parseSemanticConfig(
+      `
+name: test
+models:
+  - { name: m, table: t }
+intents:
+  - name: overview
+    keywords: [保单]
+    sql: SELECT COUNT(*) FROM t;
+metrics: []
+`,
+      'agg.yml',
+    );
+    expect(config.intents[0]?.kind).toBe('aggregate');
+
+    expect(() =>
+      parseSemanticConfig(
+        `
+name: test
+models:
+  - { name: m, table: t }
+intents:
+  - name: weird
+    keywords: [x]
+    kind: matrix
+    sql: SELECT 1;
+metrics: []
+`,
+        'bad-kind.yml',
+      ),
+    ).toThrow(/kind/);
+  });
+});

@@ -8,6 +8,11 @@ import type { ConversationRecord, MemoryStore } from '../memory';
 import { AgentPlanner } from '../planner';
 import { analyzeQueryResult } from '../tools/result-analysis-tool';
 import type { AgentToolContext, ToolRegistry } from '../tools/registry';
+import {
+  buildRepairQuestion,
+  missingRequestedFields,
+  type RequestedField,
+} from '../context/result-completeness';
 import type { AgentDomainConfig } from './domain';
 
 export interface DataAnalysisAgentDeps {
@@ -30,8 +35,11 @@ export interface AnswerOptions {
 /** 注入摘要上下文的最近对话轮数。 */
 const HISTORY_INJECTION_TURNS = 3;
 
+/** 结果完整性自检发现缺字段时的最大重查次数。 */
+const MAX_REPAIR_ATTEMPTS = 1;
+
 /**
- * 通用数据分析 Agent：问题 → 语义层生成 SQL → 查询 → 分析 → (可选)LLM 摘要。
+ * 通用数据分析 Agent：问题 → 语义层生成 SQL → 查询 → 完整性自检(缺字段自动重查) → 分析 → (可选)LLM 摘要。
  * 与行业无关：领域差异全部由 domain 配置与注入的语义层/工具决定。
  */
 export class DataAnalysisAgent {
@@ -62,40 +70,87 @@ export class DataAnalysisAgent {
     try {
       emit('plan', '理解业务问题', question);
 
-      const plan = this.planner.createPlan(question);
-      emit('observation', '生成执行计划', plan.map((s) => `${s.action}: ${s.description}`).join(' → '));
+      let plan = this.planner.createPlan(question);
+      emit(
+        'observation',
+        '生成执行计划',
+        plan.map((s) => `${s.action}: ${s.description}`).join(' → '),
+      );
 
-      const sqlStart = Date.now();
-      const sqlResult = (await this.deps.tools.execute(
-        'wren_generate_sql',
-        question,
-        context,
-      )) as { sql: string };
-      const { sql } = sqlResult;
-      toolCalls.push({
-        name: 'wren_generate_sql',
-        input: question,
-        output: sql,
-        durationMs: Date.now() - sqlStart,
-        ok: true,
-      });
-      emit('tool_call', '通过语义层生成 SQL', sql);
+      // 一次"生成 SQL → 执行"往返（重查时复用）
+      const runQuery = async (targetQuestion: string, callLabel: string) => {
+        const sqlStart = Date.now();
+        const sqlResult = (await this.deps.tools.execute(
+          'wren_generate_sql',
+          targetQuestion,
+          context,
+        )) as { sql: string };
+        const { sql } = sqlResult;
+        toolCalls.push({
+          name: 'wren_generate_sql',
+          input: targetQuestion,
+          output: sql,
+          durationMs: Date.now() - sqlStart,
+          ok: true,
+        });
+        emit('tool_call', callLabel, sql);
 
-      const queryStart = Date.now();
-      const result = (await this.deps.tools.execute('database_query', sql, context)) as {
-        rows: Record<string, unknown>[];
-        count: number | null;
+        const queryStart = Date.now();
+        const result = (await this.deps.tools.execute('database_query', sql, context)) as {
+          rows: Record<string, unknown>[];
+          count: number | null;
+        };
+        toolCalls.push({
+          name: 'database_query',
+          input: sql,
+          output: { rows: result.rows.length, count: result.count },
+          durationMs: Date.now() - queryStart,
+          ok: true,
+        });
+        emit('tool_result', `查询执行完成，返回 ${result.rows.length} 行`);
+        return { sql, result };
       };
-      toolCalls.push({
-        name: 'database_query',
-        input: sql,
-        output: { rows: result.rows.length, count: result.count },
-        durationMs: Date.now() - queryStart,
-        ok: true,
-      });
-      emit('tool_result', `查询执行完成，返回 ${result.rows.length} 行`);
+
+      let { sql, result } = await runQuery(question, '通过语义层生成 SQL');
+
+      // 结果完整性自检：用户明确要求的字段（如保单号、被保人姓名）未返回 → 修订计划并自动重查
+      let missing: RequestedField[] = missingRequestedFields(question, result.rows);
+      for (let attempt = 0; missing.length > 0 && attempt < MAX_REPAIR_ATTEMPTS; attempt += 1) {
+        const labels = missing.map((m) => m.label).join('、');
+        emit(
+          'observation',
+          '检查结果完整性',
+          `查询结果缺少用户要求的字段：${labels}，重新生成 SQL`,
+        );
+        plan = [
+          ...plan,
+          {
+            id: `revise_${attempt + 1}`,
+            action: 'revise_sql',
+            description: `补齐字段（${labels}）后重新生成并执行 SQL`,
+          },
+        ];
+        emit(
+          'observation',
+          '修订执行计划',
+          plan.map((s) => `${s.action}: ${s.description}`).join(' → '),
+        );
+        const repaired = await runQuery(
+          buildRepairQuestion(question, missing),
+          '修订后重新生成 SQL',
+        );
+        sql = repaired.sql;
+        result = repaired.result;
+        missing = missingRequestedFields(question, result.rows);
+      }
 
       const analysis = analyzeQueryResult(result.rows, question);
+      if (missing.length > 0) {
+        const labels = missing.map((m) => m.label).join('、');
+        const note = `本次查询结果仍缺少用户要求的字段：${labels}（数据库中该字段存在，但当前 SQL 未取到）。`;
+        analysis.observations.push(note);
+        analysis.summary = `${analysis.summary} ${note}`;
+      }
       toolCalls.push({
         name: 'result_analysis',
         input: { rows: result.rows.length },
@@ -183,7 +238,7 @@ export class DataAnalysisAgent {
           `问题：${question}`,
           `数据：\n${JSON.stringify(analysis.table, null, 2)}`,
           `初步观察：\n${analysis.observations.join('\n')}`,
-          '硬性要求：日期与数值必须逐字照抄上方数据，禁止改写、取整或推算；数据中不存在的字段如实说明"未包含"；历史对话仅供上下文参考，不得替代本次查询结果。',
+          '硬性要求：日期与数值必须逐字照抄上方数据，禁止改写、取整或推算；数据中不存在的字段如实说明"未包含"；若查询结果缺少用户明确要求的字段，应说明"本次查询未取到该字段"而不是断言数据库不存在该数据；历史对话仅供上下文参考，不得替代本次查询结果。',
         ].join('\n\n'),
       },
     ];

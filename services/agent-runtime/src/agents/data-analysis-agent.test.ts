@@ -25,7 +25,11 @@ const fakeSql: SqlExecutor = {
   }),
 };
 
-function makeAgent(domain = financeDomain, model?: ModelProvider, memory = new InMemoryMemoryStore()) {
+function makeAgent(
+  domain = financeDomain,
+  model?: ModelProvider,
+  memory = new InMemoryMemoryStore(),
+) {
   const sql = fakeSql;
   const tools = createDataAnalysisTools(fakeContext, sql);
   return {
@@ -95,7 +99,12 @@ describe('DataAnalysisAgent', () => {
     };
     const sql = fakeSql;
     const tools = createDataAnalysisTools(brokenContext, sql);
-    const agent = new DataAnalysisAgent({ domain: financeDomain, context: brokenContext, sql, tools });
+    const agent = new DataAnalysisAgent({
+      domain: financeDomain,
+      context: brokenContext,
+      sql,
+      tools,
+    });
 
     const result = await agent.answer('为什么利润下降？');
 
@@ -122,7 +131,14 @@ describe('DataAnalysisAgent session & streaming', () => {
     await agent.answer('为什么利润下降？', {
       onEvent: (event) => emitted.push(event.type),
     });
-    expect(emitted).toEqual(['plan', 'observation', 'tool_call', 'tool_result', 'observation', 'answer']);
+    expect(emitted).toEqual([
+      'plan',
+      'observation',
+      'tool_call',
+      'tool_result',
+      'observation',
+      'answer',
+    ]);
   });
 
   it('continues an existing session and injects history into the summary prompt', async () => {
@@ -134,7 +150,9 @@ describe('DataAnalysisAgent session & streaming', () => {
     const model: ModelProvider = {
       name: 'mock',
       chat: async (messages: ChatMessage[]) => {
-        historyInjected = messages.some((m) => m.content.includes('历史对话') && m.content.includes('为什么利润下降'));
+        historyInjected = messages.some(
+          (m) => m.content.includes('历史对话') && m.content.includes('为什么利润下降'),
+        );
         return { role: 'assistant', content: '续聊摘要' };
       },
     };
@@ -144,5 +162,66 @@ describe('DataAnalysisAgent session & streaming', () => {
     expect(result.sessionId).toBe('sess-1');
     expect(historyInjected).toBe(true);
     expect(result.answer).toBe('续聊摘要');
+  });
+});
+
+describe('DataAnalysisAgent result completeness repair (P1)', () => {
+  it('re-queries when the result is missing requested detail fields', async () => {
+    let sqlCalls = 0;
+    const context: ContextEngine = {
+      ...fakeContext,
+      generateSQL: async () => {
+        sqlCalls += 1;
+        return sqlCalls === 1
+          ? "SELECT d.dict_label AS policy_status, COUNT(*) AS policy_count FROM insurance_policy p LEFT JOIN sys_dict d ON d.dict_type = 'policy_status' AND d.dict_value = p.policy_status GROUP BY d.dict_label;"
+          : "SELECT p.policy_no, c.customer_name AS insured_name, p.end_date FROM insurance_policy p LEFT JOIN ins_customer c ON c.customer_id = p.insured_id WHERE p.end_date BETWEEN '2025-01-01' AND '2025-12-31';";
+      },
+    };
+    const sql: SqlExecutor = {
+      query: async (query) =>
+        query.includes('GROUP BY')
+          ? { rows: [{ policy_status: '承保有效', policy_count: 7 }], count: 1 }
+          : {
+              rows: [{ policy_no: 'P20240002', insured_name: '刘美玲', end_date: '2025-03-31' }],
+              count: 1,
+            },
+    };
+    const tools = createDataAnalysisTools(context, sql);
+    const agent = new DataAnalysisAgent({ domain: insuranceDomain, context, sql, tools });
+
+    const result = await agent.answer('2025终止的保单有哪些？同时告诉我被保人的姓名和保单号码');
+
+    // 自动重查后返回包含明细字段的结果
+    expect(result.data).toEqual([
+      { policy_no: 'P20240002', insured_name: '刘美玲', end_date: '2025-03-31' },
+    ]);
+    expect(result.toolCalls.filter((t) => t.name === 'wren_generate_sql')).toHaveLength(2);
+    expect(result.toolCalls.filter((t) => t.name === 'database_query')).toHaveLength(2);
+    expect(result.trace.some((t) => t.includes('检查结果完整性'))).toBe(true);
+    expect(result.trace.some((t) => t.includes('修订执行计划'))).toBe(true);
+    expect(result.answer).toContain('刘美玲');
+    expect(result.error).toBeUndefined();
+  });
+
+  it('keeps a single round-trip when the result already has the requested fields', async () => {
+    const context: ContextEngine = {
+      ...fakeContext,
+      generateSQL: async () =>
+        'SELECT p.policy_no, c.customer_name AS insured_name, p.end_date FROM insurance_policy p LEFT JOIN ins_customer c ON c.customer_id = p.insured_id;',
+    };
+    const sql: SqlExecutor = {
+      query: async () => ({
+        rows: [{ policy_no: 'P20240002', insured_name: '刘美玲', end_date: '2025-03-31' }],
+        count: 1,
+      }),
+    };
+    const tools = createDataAnalysisTools(context, sql);
+    const agent = new DataAnalysisAgent({ domain: insuranceDomain, context, sql, tools });
+
+    const result = await agent.answer('2025终止的保单有哪些？同时告诉我被保人的姓名和保单号码');
+
+    expect(result.toolCalls.filter((t) => t.name === 'wren_generate_sql')).toHaveLength(1);
+    expect(result.trace.some((t) => t.includes('检查结果完整性'))).toBe(false);
+    expect(result.answer).toContain('P20240002');
   });
 });

@@ -106,13 +106,51 @@ intents:
 
   - name: policy_status
     description: 保单状态分布
-    keywords: [在保, 有效, 终止, 满期, 保单数量, 保单数, 保单状态, 保单]
+    keywords: [在保, 有效, 保单数量, 保单数, 保单状态, 保单]
     sql: |
       SELECT d.dict_label AS policy_status, COUNT(*) AS policy_count
       FROM ins_policy_main p
       LEFT JOIN sys_dict d ON d.dict_type = 'policy_status' AND d.dict_value = p.policy_status
       GROUP BY d.dict_label
       ORDER BY policy_count DESC;
+
+  - name: policy_terminated_detail
+    description: 已终止保单明细（状态=已终止，可按年份筛选终止日期；返回保单号与被保人姓名）
+    keywords: [已终止, 终止保单, 保单终止]
+    kind: detail
+    params: [year]
+    yearFallback: '1=1'
+    sql: |
+      SELECT p.policy_no,
+             c.customer_name AS insured_name,
+             p.product_name,
+             p.end_date,
+             p.surrender_date
+      FROM ins_policy_main p
+      LEFT JOIN ins_customer c ON c.customer_id = p.insured_id
+      WHERE p.policy_status = '05'
+        AND {year}
+      ORDER BY p.end_date;
+
+  - name: policy_expiry_detail
+    description: 到期/终止保单明细（按终止日期筛选年份；同时标注已终止/到期两种口径，返回保单号与被保人姓名）
+    keywords: [到期, 满期, 到期日, 续保, 续期, 终止日期, 终止, 保单到期]
+    kind: detail
+    params: [year]
+    yearFallback: 'p.end_date IS NOT NULL'
+    sql: |
+      SELECT p.policy_no,
+             c.customer_name AS insured_name,
+             p.product_name,
+             p.end_date,
+             d.dict_label AS policy_status,
+             CASE WHEN p.policy_status = '05' THEN '已终止' ELSE '到期' END AS term_type
+      FROM ins_policy_main p
+      LEFT JOIN ins_customer c ON c.customer_id = p.insured_id
+      LEFT JOIN sys_dict d ON d.dict_type = 'policy_status' AND d.dict_value = p.policy_status
+      WHERE 1=1
+        AND {year}
+      ORDER BY term_type, p.end_date;
 
   - name: claim_status
     description: 理赔状态分布

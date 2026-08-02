@@ -53,9 +53,19 @@ export function parseSemanticConfig(raw: string, source = '<inline>'): SemanticC
 
   const intents: SemanticIntent[] = Array.isArray(config['intents'])
     ? (config['intents'] as Record<string, unknown>[]).map((intent, index) => {
-        if (!isString(intent['name']) || !isStringArray(intent['keywords']) || !isString(intent['sql'])) {
+        if (
+          !isString(intent['name']) ||
+          !isStringArray(intent['keywords']) ||
+          !isString(intent['sql'])
+        ) {
           throw new Error(
             `invalid semantic config ${source}: intents[${index}] needs name, keywords[], sql`,
+          );
+        }
+        const kindValue = intent['kind'];
+        if (kindValue !== undefined && kindValue !== 'aggregate' && kindValue !== 'detail') {
+          throw new Error(
+            `invalid semantic config ${source}: intents[${index}].kind must be 'aggregate' or 'detail'`,
           );
         }
         return {
@@ -63,6 +73,9 @@ export function parseSemanticConfig(raw: string, source = '<inline>'): SemanticC
           keywords: intent['keywords'],
           description: isString(intent['description']) ? intent['description'] : undefined,
           sql: intent['sql'],
+          kind: kindValue === 'detail' ? 'detail' : 'aggregate',
+          params: isStringArray(intent['params']) ? intent['params'] : undefined,
+          yearFallback: isString(intent['yearFallback']) ? intent['yearFallback'] : undefined,
         };
       })
     : [];
@@ -83,7 +96,9 @@ export function parseSemanticConfig(raw: string, source = '<inline>'): SemanticC
     : [];
 
   if (models.length === 0 || intents.length === 0) {
-    throw new Error(`invalid semantic config ${source}: must declare at least one model and intent`);
+    throw new Error(
+      `invalid semantic config ${source}: must declare at least one model and intent`,
+    );
   }
 
   return {
