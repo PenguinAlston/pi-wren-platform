@@ -38,6 +38,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@pi-wren/agent-registry':
+        specifier: workspace:*
+        version: link:../../services/agent-registry
       '@pi-wren/agent-runtime':
         specifier: workspace:*
         version: link:../../services/agent-runtime
@@ -126,6 +129,31 @@ importers:
         version: link:../shared-types
 
   packages/shared-types: {}
+
+  services/agent-registry:
+    dependencies:
+      '@pi-wren/agent-runtime':
+        specifier: workspace:*
+        version: link:../agent-runtime
+      '@pi-wren/agent-sdk':
+        specifier: workspace:*
+        version: link:../../packages/agent-sdk
+      '@pi-wren/context-engine':
+        specifier: workspace:*
+        version: link:../context-engine
+      '@pi-wren/data-engine':
+        specifier: workspace:*
+        version: link:../data-engine
+      '@pi-wren/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      pg:
+        specifier: ^8.16.0
+        version: 8.22.0
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.15.0
+        version: 8.20.0
 
   services/agent-runtime:
     dependencies:

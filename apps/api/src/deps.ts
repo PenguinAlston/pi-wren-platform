@@ -13,17 +13,23 @@ import {
   type MemoryStore,
 } from '@pi-wren/agent-runtime';
 import {
+  AgentRegistry,
+  PostgresAgentConfigStore,
+  type CustomAgentFactory,
+} from '@pi-wren/agent-registry';
+import {
   ConfigDrivenContextEngine,
   WrenContextEngine,
   loadSemanticConfig,
   resolveSemanticFile,
   type ContextEngine,
 } from '@pi-wren/context-engine';
-import { createDefaultSqlExecutor, type SqlExecutor } from '@pi-wren/data-engine';
+import { createDefaultSqlExecutor, createPool, type SqlExecutor } from '@pi-wren/data-engine';
 import { PiSessionStore } from '@pi-wren/pi-bridge';
 import type { MetricDefinition } from '@pi-wren/shared-types';
 import { join } from 'node:path';
 import type { ApiConfig } from './config';
+import { createCustomAgentFactory } from './custom-agent-factory';
 import type { Logger } from './logger';
 
 export interface AgentSpec {
@@ -32,12 +38,16 @@ export interface AgentSpec {
   description: string;
   agent: DataAnalysisAgent;
   metrics: MetricDefinition[];
+  /** builtin=代码内置；custom=用户通过管理 API 注册 */
+  source: 'builtin' | 'custom';
 }
 
 export interface ApiDeps {
   config: ApiConfig;
   logger: Logger;
   agents: AgentSpec[];
+  /** 自定义 Agent 注册表（未配置 AGENT_SECRET_KEY 时为 undefined）。 */
+  customAgents?: AgentRegistry<AgentSpec>;
 }
 
 interface DomainRegistration {
@@ -82,15 +92,12 @@ function buildContext(
     : configEngine;
 }
 
-/** Wire together the application dependencies from validated config. */
-export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiDeps> {
-  const model = buildModel(config);
-  // 方案 A：会话持久化接入开源 Pi（jsonl 落盘），多轮续聊/压缩基于 pi 会话仓库
-  const memory: MemoryStore = new PiSessionStore({
-    ...(config.SESSION_DIR ? { sessionsRoot: config.SESSION_DIR } : {}),
-  });
+async function buildBuiltinAgents(
+  config: ApiConfig,
+  model: ModelProvider | undefined,
+  memory: MemoryStore,
+): Promise<AgentSpec[]> {
   const agents: AgentSpec[] = [];
-
   for (const { domain, semanticFile } of DOMAINS) {
     const context = buildContext(config, semanticFile, model);
     const sql: SqlExecutor = createDefaultSqlExecutor();
@@ -102,7 +109,35 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
       description: domain.description,
       agent,
       metrics: await context.listMetrics(),
+      source: 'builtin',
     });
+  }
+  return agents;
+}
+
+/** Wire together the application dependencies from validated config. */
+export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiDeps> {
+  const model = buildModel(config);
+  const memory: MemoryStore = new PiSessionStore({
+    ...(config.SESSION_DIR ? { sessionsRoot: config.SESSION_DIR } : {}),
+  });
+  const agents = await buildBuiltinAgents(config, model, memory);
+  const deps: ApiDeps = { config, logger, agents };
+
+  // 自定义 Agent：配置了 AGENT_SECRET_KEY 时启用（连接串加密存储）
+  if (config.AGENT_SECRET_KEY) {
+    const factory: CustomAgentFactory<AgentSpec> = createCustomAgentFactory({ model, memory });
+    const registry = new AgentRegistry<AgentSpec>({
+      store: new PostgresAgentConfigStore(createPool()),
+      factory,
+      secretKey: config.AGENT_SECRET_KEY,
+    });
+    const load = await registry.loadAll();
+    if (load.failed.length > 0) {
+      logger.warn({ failed: load.failed }, 'some custom agents failed to load');
+    }
+    deps.customAgents = registry;
+    agents.push(...registry.list());
   }
 
   logger.info(
@@ -110,9 +145,10 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
       provider: model?.name ?? 'none',
       wren: Boolean(config.WREN_URL),
       domains: agents.map((a) => a.id),
+      customAgents: agents.filter((a) => a.source === 'custom').length,
     },
     'dependencies initialized',
   );
 
-  return { config, logger, agents };
+  return deps;
 }

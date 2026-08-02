@@ -53,6 +53,7 @@ function buildAgent(
     description: domain.description,
     agent,
     metrics: [],
+    source: 'builtin',
   };
 }
 
@@ -161,5 +162,171 @@ describe('api sse stream', () => {
       body: JSON.stringify({}),
     });
     expect(response.status).toBe(400);
+  });
+});
+
+// ---------- 自定义 Agent 管理 API ----------
+import {
+  AgentRegistry,
+  InMemoryAgentConfigStore,
+  type CustomAgentConfig,
+  type CustomAgentFactory,
+} from '@pi-wren/agent-registry';
+
+const ADMIN_TOKEN = 'test-admin-token';
+const SECRET_KEY = 'test-secret-0123456789abcdef';
+
+function buildAdminDeps(base: ApiDeps): { deps: ApiDeps; server: Server; baseUrl: string } {
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    LOG_LEVEL: 'silent',
+    ADMIN_TOKEN,
+    AGENT_SECRET_KEY: SECRET_KEY,
+  });
+  const factory: CustomAgentFactory<AgentSpec> = {
+    async build(agentConfig: CustomAgentConfig) {
+      const template = base.agents[0]!;
+      return {
+        id: agentConfig.agentId,
+        label: agentConfig.label,
+        description: agentConfig.description ?? '',
+        agent: template.agent,
+        metrics: [],
+        source: 'custom',
+      };
+    },
+  };
+  const registry = new AgentRegistry<AgentSpec>({
+    store: new InMemoryAgentConfigStore(),
+    factory,
+    secretKey: SECRET_KEY,
+  });
+  const deps: ApiDeps = { ...base, config, customAgents: registry };
+  const server: Server = createApp(deps).listen(0);
+  return { deps, server, baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}` };
+}
+
+const VALID_MDL = `name: demo
+models:
+  - name: product
+    table: demo_product
+    columns:
+      - name: id
+        type: integer
+intents:
+  - name: count_all
+    keywords: [有多少, 数量]
+    sql: SELECT COUNT(*) FROM demo_product
+`;
+
+describe('admin agents api', () => {
+  const admin = buildAdminDeps(deps);
+  const base = admin.baseUrl;
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => admin.server.close(() => resolve()));
+  });
+
+  it('returns 503 when ADMIN_TOKEN is not configured', async () => {
+    const response = await fetch(`${baseUrl}/api/admin/agents`);
+    expect(response.status).toBe(503);
+  });
+
+  it('rejects requests without a valid admin token', async () => {
+    const noToken = await fetch(`${base}/api/admin/agents`, { headers: {} });
+    expect(noToken.status).toBe(401);
+
+    const badToken = await fetch(`${base}/api/admin/agents`, {
+      headers: { 'x-admin-token': 'wrong' },
+    });
+    expect(badToken.status).toBe(401);
+  });
+
+  it('validates MDL without persisting', async () => {
+    const ok = await fetch(`${base}/api/admin/agents/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+      body: JSON.stringify({ mdl: VALID_MDL }),
+    });
+    expect(ok.status).toBe(200);
+    const body = (await ok.json()) as { models: string[] };
+    expect(body.models).toContain('demo_product');
+
+    const bad = await fetch(`${base}/api/admin/agents/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+      body: JSON.stringify({ mdl: 'name: x' }),
+    });
+    expect(bad.status).toBe(400);
+  });
+
+  it('registers a custom agent and exposes it in the public list', async () => {
+    const response = await fetch(`${base}/api/admin/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+      body: JSON.stringify({
+        agentId: 'my-erp',
+        name: 'ERP 查询',
+        label: 'ERP 系统查询',
+        mdl: VALID_MDL,
+        db: { host: 'localhost', port: 5432, database: 'erp', user: 'demo', password: 'p@ss' },
+      }),
+    });
+    expect(response.status).toBe(201);
+
+    const list = (await fetch(`${base}/api/admin/agents`, {
+      headers: { 'x-admin-token': ADMIN_TOKEN },
+    }).then((r) => r.json())) as { agents: { agentId: string; connection: string; mdl?: string }[] };
+    const created = list.agents.find((a) => a.agentId === 'my-erp');
+    expect(created?.connection).toContain('***@');
+    expect(created?.connection).not.toContain('p@ss');
+    expect(created?.mdl).toBeUndefined(); // 列表不返回 mdl
+
+    const publicList = (await fetch(`${base}/api/agents`).then((r) => r.json())) as {
+      agents: { id: string; source: string }[];
+    };
+    expect(publicList.agents.some((a) => a.id === 'my-erp' && a.source === 'custom')).toBe(true);
+  });
+
+  it('rejects duplicate agent ids', async () => {
+    const response = await fetch(`${base}/api/admin/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+      body: JSON.stringify({
+        agentId: 'my-erp',
+        name: 'Again',
+        label: 'Again',
+        mdl: VALID_MDL,
+        db: { database: 'erp', user: 'u', password: 'p' },
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()) as { error: string }).toMatchObject({});
+  });
+
+  it('updates and deletes a custom agent', async () => {
+    const update = await fetch(`${base}/api/admin/agents/my-erp`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
+      body: JSON.stringify({ label: 'ERP 新名称' }),
+    });
+    expect(update.status).toBe(200);
+
+    const detail = (await fetch(`${base}/api/admin/agents/my-erp`, {
+      headers: { 'x-admin-token': ADMIN_TOKEN },
+    }).then((r) => r.json())) as { agent: { label: string; mdl: string } };
+    expect(detail.agent.label).toBe('ERP 新名称');
+    expect(detail.agent.mdl).toContain('demo_product');
+
+    const del = await fetch(`${base}/api/admin/agents/my-erp`, {
+      method: 'DELETE',
+      headers: { 'x-admin-token': ADMIN_TOKEN },
+    });
+    expect(del.status).toBe(204);
+
+    const missing = await fetch(`${base}/api/admin/agents/my-erp`, {
+      headers: { 'x-admin-token': ADMIN_TOKEN },
+    });
+    expect(missing.status).toBe(404);
   });
 });

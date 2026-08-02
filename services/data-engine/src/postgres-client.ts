@@ -8,6 +8,8 @@ export interface DatabaseConfig {
   password: string;
   max?: number;
   connectionTimeoutMillis?: number;
+  /** 单条语句超时（ms），pg statement_timeout；不设置则无超时。 */
+  statementTimeoutMillis?: number;
 }
 
 /** Build a pg Pool from an explicit config (or process env by default). */
@@ -20,6 +22,7 @@ export function createPool(config: Partial<DatabaseConfig> = {}) {
     password: config.password ?? process.env.DB_PASSWORD ?? 'demo',
     max: config.max ?? 10,
     connectionTimeoutMillis: config.connectionTimeoutMillis ?? 5_000,
+    ...(config.statementTimeoutMillis !== undefined ? { statement_timeout: config.statementTimeoutMillis } : {}),
   };
 
   return new pg.Pool(resolved);

@@ -56,6 +56,14 @@ DataAnalysisAgent（财务 / 保险，按领域配置驱动）
 - `WrenContextEngine` / `WrenAIClient`：对接真实 Wren AI 服务（配置 `WREN_URL` 启用）
 - 语义配置结构对齐 Wren AI 的 MDL 建模思路，便于未来迁移
 
+### 自定义 Agent 注册表（services/agent-registry）
+
+- `sys_agent_config` 表持久化用户注册的 Agent（MDL + 数据库连接串，连接串 AES-256-GCM 加密落库）
+- `AgentRegistry`：启动加载 + 运行时增删改（无需重启）、单 Agent 失败隔离（status=error）
+- 管理 API（`/api/admin/agents*`，`X-Admin-Token`）：注册/列表/详情/更新/删除/连接测试/MDL 校验
+- 每个自定义 Agent = 独立连接池（max 3、语句超时 15s）+ 独立语义引擎；SQL 白名单自动来自其 MDL
+- 数据流：`parseSemanticConfig(mdl)` → 规则引擎（兜底）+ LLM 动态 SQL → DataAnalysisAgent，与内置 Agent 同一流水线
+
 ### Pi 桥接（services/pi-bridge，方案 A：会话层接入）
 
 - `PiSessionStore implements MemoryStore`：基于开源 Pi `JsonlSessionRepo` + `NodeExecutionEnv`，

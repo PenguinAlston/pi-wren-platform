@@ -52,7 +52,7 @@
 - [ ] 缓存层（Redis 缓存指标定义与 SQL 生成结果）
 
 ### P3 — 平台化
-- [ ] 工作流引擎（多步编排、审批流）与 Agent 注册/发现中心（当前为配置文件注册）
+- [x] Agent 注册/发现中心：`/api/admin/agents` 自定义 Agent 注册（MDL + 连接串，见 `docs/custom-agent-design.md`）；工作流引擎（多步编排、审批流）待做
 - [ ] 指标定义管理界面（语义模型 CRUD）
 - [ ] 多数据源连接器（BigQuery、Snowflake 等）
 - [ ] 多租户与细粒度数据权限（行级/列级）

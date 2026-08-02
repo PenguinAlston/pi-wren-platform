@@ -37,6 +37,10 @@ const envSchema = z.object({
 
   // 会话持久化目录（开源 Pi jsonl 存储），默认 <cwd>/data/sessions
   SESSION_DIR: z.string().optional(),
+
+  // 自定义 Agent 管理面：ADMIN_TOKEN（X-Admin-Token 比对）+ 连接串加密密钥（≥32 字节）
+  ADMIN_TOKEN: z.string().optional(),
+  AGENT_SECRET_KEY: z.string().min(8, 'AGENT_SECRET_KEY 至少 8 字符，建议 ≥32 字节').optional(),
 });
 
 export type ApiConfig = z.infer<typeof envSchema>;

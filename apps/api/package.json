@@ -23,7 +23,8 @@
     "@pi-wren/context-engine": "workspace:*",
     "@pi-wren/data-engine": "workspace:*",
     "dotenv": "^16.4.5",
-    "@pi-wren/pi-bridge": "workspace:*"
+    "@pi-wren/pi-bridge": "workspace:*",
+    "@pi-wren/agent-registry": "workspace:*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
