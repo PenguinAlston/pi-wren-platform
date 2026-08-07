@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from 'animal-island-ui';
 import { formatCell, toCsv } from './chat-utils';
 
 interface Props {
@@ -35,9 +36,9 @@ export default function ChatResultTable({ data }: Props) {
     <div>
       <div className="ai-table-toolbar">
         <span className="meta">共 {data.length} 行 · 第 {safePage}/{totalPages} 页</span>
-        <button className="btn btn-secondary btn-sm" onClick={exportCsv}>
+        <Button size="small" onClick={exportCsv}>
           导出 CSV
-        </button>
+        </Button>
       </div>
       <div className="table-wrap">
         <table className="data-table">

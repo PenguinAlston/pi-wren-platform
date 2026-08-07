@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { Button } from 'animal-island-ui';
 import type { ModuleId, ModuleDef } from '../modules';
 import { COLUMN_LABELS, formatValue } from '../modules';
 
@@ -58,9 +59,9 @@ export default function DetailDrawer({ payload, module, onClose, onOpenDetail }:
             {module.label}详情
             <span className="drawer-module-tag">{payload.module.toUpperCase()}</span>
           </h2>
-          <button className="drawer-close" onClick={onClose} aria-label="关闭">
-            ✕
-          </button>
+          <Button size="small" onClick={onClose}>
+            关闭
+          </Button>
         </header>
 
         <div className="drawer-body">

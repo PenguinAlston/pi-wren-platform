@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button, Input } from 'animal-island-ui';
 import { relativeTime } from './chat-utils';
 
 export interface SessionSummary {
@@ -48,14 +49,15 @@ export default function SessionSidebar({
     <aside className="chat-sidebar">
       <div className="chat-sidebar-head">
         <span className="chat-sidebar-title">会话</span>
-        <button className="btn btn-secondary btn-sm" onClick={onNew}>
-          ＋ 新建
-        </button>
+        <Button size="small" onClick={onNew}>
+          新建
+        </Button>
       </div>
 
-      <input
-        className="field-input chat-search"
+      <Input
         type="search"
+        allowClear
+        className="chat-search"
         placeholder="搜索会话"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
@@ -74,8 +76,8 @@ export default function SessionSidebar({
                 onClick={() => onSelect(session.sessionId)}
               >
                 {editingId === session.sessionId ? (
-                  <input
-                    className="field-input chat-rename-input"
+                  <Input
+                    className="chat-rename-input"
                     value={draft}
                     autoFocus
                     onChange={(e) => setDraft(e.target.value)}
@@ -96,19 +98,20 @@ export default function SessionSidebar({
                       {relativeTime(session.updatedAt)} · {session.messageCount} 轮
                     </div>
                     <div className="chat-session-actions" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        className="link-btn"
-                        title="重命名"
+                      <Button
+                        type="link"
+                        size="small"
                         onClick={() => {
                           setEditingId(session.sessionId);
                           setDraft(session.name);
                         }}
                       >
                         重命名
-                      </button>
-                      <button
-                        className="link-btn link-danger"
-                        title="删除"
+                      </Button>
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
                         onClick={() => {
                           if (window.confirm(`删除会话「${session.name}」？`)) {
                             onDelete(session.sessionId);
@@ -116,7 +119,7 @@ export default function SessionSidebar({
                         }}
                       >
                         删除
-                      </button>
+                      </Button>
                     </div>
                   </>
                 )}

@@ -9,9 +9,10 @@ import { detectChart, formatCell, type ChartSpec } from './chat-utils';
 
 echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
-const PALETTE = ['#38e1ff', '#5b8cff', '#8b6cff', '#3ddc97', '#ffb454', '#ff5d73'];
-const AXIS_COLOR = '#8fa3c9';
-const SPLIT_LINE = 'rgba(148, 180, 255, 0.12)';
+// 动物之森风调色板：薄荷/青/黄/绿/橙/粉，深棕文字
+const PALETTE = ['#19c8b9', '#3dd4c6', '#f5c31c', '#6fba2c', '#e59266', '#f8a6b2'];
+const AXIS_COLOR = '#9f927d';
+const SPLIT_LINE = 'rgba(159, 146, 125, 0.18)';
 
 interface Props {
   data: Record<string, unknown>[];
@@ -26,9 +27,9 @@ function buildOption(spec: ChartSpec, rows: Record<string, unknown>[]) {
     color: PALETTE,
     tooltip: {
       trigger: spec.type === 'pie' ? 'item' : 'axis',
-      backgroundColor: 'rgba(10, 17, 32, 0.92)',
-      borderColor: 'rgba(148, 180, 255, 0.25)',
-      textStyle: { color: '#eaf1ff' },
+      backgroundColor: 'rgba(248, 248, 240, 0.96)',
+      borderColor: 'rgba(159, 146, 125, 0.5)',
+      textStyle: { color: '#794f27' },
     },
     legend: {
       show: spec.type === 'line' || spec.type === 'bar',
@@ -44,7 +45,7 @@ function buildOption(spec: ChartSpec, rows: Record<string, unknown>[]) {
         {
           type: 'pie',
           radius: ['38%', '68%'],
-          itemStyle: { borderColor: '#0b1222', borderWidth: 2 },
+          itemStyle: { borderColor: '#f8f8f0', borderWidth: 2 },
           label: { color: AXIS_COLOR },
           data: rows.map((row) => ({
             name: formatCell(row[spec.labelKey]),
@@ -61,7 +62,7 @@ function buildOption(spec: ChartSpec, rows: Record<string, unknown>[]) {
       type: 'category',
       data: labels,
       axisLabel: { interval: 0, rotate: labels.length > 6 ? 30 : 0, color: AXIS_COLOR },
-      axisLine: { lineStyle: { color: 'rgba(148, 180, 255, 0.3)' } },
+      axisLine: { lineStyle: { color: 'rgba(159, 146, 125, 0.5)' } },
     },
     yAxis: {
       type: 'value',

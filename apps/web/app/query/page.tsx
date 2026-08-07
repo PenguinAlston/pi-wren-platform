@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Button, Input } from 'animal-island-ui';
 import DetailDrawer, { type DetailPayload } from './components/DetailDrawer';
 import {
   MODULES,
@@ -34,7 +36,6 @@ interface SortState {
 }
 
 const EMPTY_CONDITIONS: Record<string, string> = {};
-const MODULE_IDS: ModuleId[] = ['contract', 'preserve', 'claim'];
 
 /** 从 URL ?m= 读取初始模块（侧边栏切换会同步 URL）。 */
 function initialModule(): ModuleId {
@@ -86,6 +87,14 @@ function isMonoColumn(key: string): boolean {
 }
 
 export default function QueryPage() {
+  return (
+    <Suspense fallback={null}>
+      <QueryPageInner />
+    </Suspense>
+  );
+}
+
+function QueryPageInner() {
   const [moduleId, setModuleId] = useState<ModuleId>(initialModule);
   const [conditions, setConditions] = useState<Record<string, string>>({ ...EMPTY_CONDITIONS });
   /** 手动展开的筛选分组（有值的分组始终自动展开）。 */
@@ -102,6 +111,22 @@ export default function QueryPage() {
   const [detail, setDetail] = useState<DetailPayload | null>(null);
 
   const module = MODULES[moduleId];
+  const searchParams = useSearchParams();
+  const urlModule = searchParams.get('m');
+
+  // 全局侧栏已细分契约/保全/理赔：模块由 URL ?m= 驱动，页面只展示对应业务
+  useEffect(() => {
+    if (urlModule === 'contract' || urlModule === 'preserve' || urlModule === 'claim') {
+      setModuleId(urlModule);
+      setConditions({ ...EMPTY_CONDITIONS });
+      setOpenGroups(new Set());
+      setResult(null);
+      setPage(1);
+      setSort({ sortOrder: 'desc' });
+      setError(null);
+      setDetail(null);
+    }
+  }, [urlModule]);
 
   // 下拉选项与数据库联动（需求 3.2）：字典 + 机构一次拉取
   useEffect(() => {
@@ -151,21 +176,6 @@ export default function QueryPage() {
     },
     [moduleId, conditions, pageSize, sort, module.fields],
   );
-
-  const switchModule = (next: ModuleId) => {
-    if (next === moduleId) {
-      return;
-    }
-    setModuleId(next);
-    setConditions({ ...EMPTY_CONDITIONS });
-    setOpenGroups(new Set());
-    setResult(null);
-    setPage(1);
-    setSort({ sortOrder: 'desc' });
-    setError(null);
-    setDetail(null);
-    window.history.replaceState(null, '', `/query?m=${next}`);
-  };
 
   const clearCondition = (key: string) => {
     const next = { ...conditions, [key]: '' };
@@ -290,7 +300,7 @@ export default function QueryPage() {
     if (field.type === 'select') {
       const options = selectOptions(field);
       return (
-        <select className="field-input" value={value} onChange={(e) => setValue(e.target.value)}>
+        <select className="ai-select" value={value} onChange={(e) => setValue(e.target.value)}>
           <option value="">全部</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
@@ -302,33 +312,33 @@ export default function QueryPage() {
     }
     if (field.type === 'date') {
       return (
-        <input
-          className="field-input"
+        <Input
           type="date"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          style={{ width: '100%' }}
         />
       );
     }
     if (field.type === 'number') {
       return (
-        <input
-          className="field-input"
+        <Input
           type="number"
           min={0}
           placeholder={field.placeholder ?? '请输入金额'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          style={{ width: '100%' }}
         />
       );
     }
     return (
-      <input
-        className="field-input"
+      <Input
         type="text"
         placeholder={field.placeholder ?? '请输入'}
         value={value}
         onChange={(e) => setValue(e.target.value)}
+        style={{ width: '100%' }}
       />
     );
   };
@@ -337,29 +347,8 @@ export default function QueryPage() {
 
   return (
     <main className="query-layout">
-      {/* 左侧：模块胶囊 + 筛选侧栏 */}
+      {/* 左侧：查询条件筛选（模块由全局侧栏 ?m= 驱动，此处不再细分业务模块） */}
       <aside className="query-sidebar">
-        <section className="side-panel">
-          <header className="side-panel-head">
-            <h3>业务模块</h3>
-          </header>
-          <div className="stations">
-            {MODULE_IDS.map((id) => {
-              const m = MODULES[id];
-              return (
-                <button
-                  key={id}
-                  className={'query-module-btn' + (moduleId === id ? ' active' : '')}
-                  onClick={() => switchModule(id)}
-                >
-                  <span className="mi">{m.icon}</span>
-                  <span>{m.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
         <section className="side-panel">
           <header className="side-panel-head">
             <h3>查询条件</h3>
@@ -404,27 +393,13 @@ export default function QueryPage() {
               );
             })}
             <div className="filter-actions">
-              <button className="btn" onClick={() => void runQuery(1)} disabled={loading}>
-                {loading ? (
-                  <>
-                    <span className="spinner" />
-                    查询中
-                  </>
-                ) : (
-                  '▶ 查询'
-                )}
-              </button>
-              <button className="btn btn-secondary" title="重置条件" onClick={resetConditions}>
-                重置
-              </button>
-              <button
-                className="btn btn-secondary"
-                title="导出 CSV"
-                onClick={() => void exportCsv()}
-                disabled={loading}
-              >
+              <Button type="primary" loading={loading} onClick={() => void runQuery(1)}>
+                {loading ? '查询中' : '查询'}
+              </Button>
+              <Button onClick={resetConditions}>重置</Button>
+              <Button onClick={() => void exportCsv()} disabled={loading}>
                 导出
-              </button>
+              </Button>
             </div>
           </div>
         </section>
@@ -560,15 +535,11 @@ export default function QueryPage() {
                 </div>
 
                 <div className="query-pagination">
-                  <button
-                    className="btn btn-secondary"
-                    disabled={page <= 1 || loading}
-                    onClick={() => void runQuery(page - 1)}
-                  >
+                  <Button size="small" disabled={page <= 1 || loading} onClick={() => void runQuery(page - 1)}>
                     上一页
-                  </button>
+                  </Button>
                   <select
-                    className="field-input page-size"
+                    className="ai-select page-size"
                     value={pageSize}
                     onChange={(e) => {
                       const next = Number(e.target.value);
@@ -582,13 +553,9 @@ export default function QueryPage() {
                       </option>
                     ))}
                   </select>
-                  <button
-                    className="btn btn-secondary"
-                    disabled={page >= totalPages || loading}
-                    onClick={() => void runQuery(page + 1)}
-                  >
+                  <Button size="small" disabled={page >= totalPages || loading} onClick={() => void runQuery(page + 1)}>
                     下一页
-                  </button>
+                  </Button>
                 </div>
               </>
             )

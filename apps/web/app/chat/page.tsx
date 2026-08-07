@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Collapse } from 'animal-island-ui';
 import type { AgentEvent, AgentRunResult } from '@pi-wren/shared-types';
 import ChatChart from './components/ChatChart';
 import ChatResultTable from './components/ChatResultTable';
@@ -30,7 +31,6 @@ interface SseFrame {
 }
 
 const EXAMPLES: Record<string, string[]> = {
-  finance: ['为什么利润下降了？', '本季度收入趋势如何？', '成本变化情况如何？'],
   insurance: [
     '各险种的赔付率如何？',
     '保费规模按险种分布？',
@@ -64,7 +64,7 @@ function nextMessageId(): string {
 /** AI 智能问答页（需求第 4 章）：复刻 chat.qwen.ai 会话形态，保留原有问答链路。 */
 export default function ChatPage() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [domain, setDomain] = useState('finance');
+  const [domain, setDomain] = useState('insurance');
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [sessionsSearch, setSessionsSearch] = useState('');
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined);
@@ -327,9 +327,9 @@ export default function ChatPage() {
           <div className="chat-header-right">
             {activeSessionId ? <span className="meta">会话 {activeSessionId.slice(0, 8)}</span> : null}
             {messages.length > 0 ? (
-              <button className="link-btn" onClick={newSession} disabled={loading}>
+              <Button type="link" size="small" onClick={newSession} disabled={loading}>
                 清空会话
-              </button>
+              </Button>
             ) : null}
           </div>
         </header>
@@ -341,14 +341,9 @@ export default function ChatPage() {
               <p className="meta">用自然语言向企业数据提问，支持多轮递进追问与历史会话回看。</p>
               <div className="chat-examples">
                 {(EXAMPLES[domain] ?? []).map((example) => (
-                  <button
-                    key={example}
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => void send(example)}
-                    disabled={loading}
-                  >
+                  <Button key={example} size="small" onClick={() => void send(example)} disabled={loading}>
                     {example}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -372,9 +367,9 @@ export default function ChatPage() {
                     <>
                       {message.content ? <p className="chat-answer">{message.content}</p> : null}
                       {message.error ? (
-                        <button className="link-btn" onClick={() => void retryLast()}>
+                        <Button type="link" size="small" onClick={() => void retryLast()}>
                           重试
-                        </button>
+                        </Button>
                       ) : null}
                       {message.data && message.data.length > 0 ? (
                         <>
@@ -383,24 +378,29 @@ export default function ChatPage() {
                         </>
                       ) : null}
                       {message.sql ? (
-                        <details className="chat-details">
-                          <summary>查看 SQL</summary>
-                          <pre className="code">{message.sql}</pre>
-                        </details>
+                        <div className="chat-details">
+                          <Collapse
+                            question="查看 SQL"
+                            answer={<pre className="code">{message.sql}</pre>}
+                          />
+                        </div>
                       ) : null}
                       {message.events && message.events.length > 0 ? (
-                        <details className="chat-details">
-                          <summary>执行轨迹（{message.events.length}）</summary>
-                          <TracePanel events={message.events} />
-                        </details>
+                        <div className="chat-details">
+                          <Collapse
+                            question={`执行轨迹（${message.events.length}）`}
+                            answer={<TracePanel events={message.events} />}
+                          />
+                        </div>
                       ) : null}
                       <div className="chat-bubble-actions">
-                        <button
-                          className="link-btn"
+                        <Button
+                          type="link"
+                          size="small"
                           onClick={() => void copyAnswer(message.id, message.content)}
                         >
                           {copiedId === message.id ? '已复制' : '复制'}
-                        </button>
+                        </Button>
                       </div>
                     </>
                   )}
@@ -433,9 +433,9 @@ export default function ChatPage() {
               }
             }}
           />
-          <button className="btn" onClick={() => void send()} disabled={loading || !input.trim()}>
-            {loading ? '分析中…' : '发送'}
-          </button>
+          <Button type="primary" loading={loading} onClick={() => void send()} disabled={!input.trim()}>
+            发送
+          </Button>
         </footer>
       </section>
     </main>

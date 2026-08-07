@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { Button, Input, Modal, Switch } from 'animal-island-ui';
 
 interface CustomAgentView {
   agentId: string;
@@ -59,6 +60,7 @@ export default function AgentsPage() {
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem(TOKEN_KEY);
@@ -185,8 +187,11 @@ export default function AgentsPage() {
     }
   }
 
-  async function remove(agentId: string) {
-    if (!window.confirm(`确认注销 Agent「${agentId}」？此操作不可恢复。`)) return;
+  function remove(agentId: string) {
+    setConfirmDelete(agentId);
+  }
+
+  async function doDelete(agentId: string) {
     setBusy(agentId);
     try {
       await api(`/admin/agents/${agentId}`, { method: 'DELETE' });
@@ -196,6 +201,7 @@ export default function AgentsPage() {
       setMessage({ kind: 'err', text: err instanceof Error ? err.message : '注销失败' });
     } finally {
       setBusy(null);
+      setConfirmDelete(null);
     }
   }
 
@@ -247,8 +253,7 @@ export default function AgentsPage() {
           用户提供 MDL + 数据库连接串即可注册专属查询 Agent。管理接口需 X-Admin-Token（生产环境建议接入 SSO/登录，勿在前端存储长期密钥）。
         </p>
         <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-          <input
-            className="input"
+          <Input
             type="password"
             placeholder="X-Admin-Token"
             value={token}
@@ -258,9 +263,9 @@ export default function AgentsPage() {
             }}
             style={{ maxWidth: 280 }}
           />
-          <button className="btn" onClick={() => void refresh()} disabled={!token}>
+          <Button onClick={() => void refresh()} disabled={!token}>
             加载列表
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -271,80 +276,75 @@ export default function AgentsPage() {
       <div className="card">
         <h2 className="section">{editing ? `编辑 Agent：${editing}` : '注册新 Agent'}</h2>
         <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(2, 1fr)' }}>
-          <input
-            className="input"
+          <Input
             placeholder="agentId（小写字母/数字/连字符，如 my-erp）"
             value={form.agentId}
             onChange={(e) => setField('agentId', e.target.value)}
             disabled={Boolean(editing)}
           />
-          <input
-            className="input"
+          <Input
             placeholder="名称（如 ERP 查询）"
             value={form.name}
             onChange={(e) => setField('name', e.target.value)}
           />
-          <input
-            className="input"
+          <Input
             placeholder="标签（如 ERP 数据查询）"
             value={form.label}
             onChange={(e) => setField('label', e.target.value)}
           />
-          <input
-            className="input"
+          <Input
             placeholder="ownerId（多租户归属，可选）"
             value={form.ownerId}
             onChange={(e) => setField('ownerId', e.target.value)}
           />
         </div>
         <textarea
-          className="input"
+          className="textarea"
           placeholder="描述（可选）"
           value={form.description}
           onChange={(e) => setField('description', e.target.value)}
           style={{ marginTop: 10 }}
         />
         <textarea
-          className="input"
+          className="textarea"
           placeholder="MDL（YAML 语义配置：models/intents/metrics/knowledge）"
           value={form.mdl}
           onChange={(e) => setField('mdl', e.target.value)}
           style={{ marginTop: 10, minHeight: 220, fontFamily: 'monospace' }}
         />
         <div style={{ marginTop: 8 }}>
-          <button className="btn btn-secondary" onClick={() => void validateMdl()} disabled={!form.mdl}>
+          <Button onClick={() => void validateMdl()} disabled={!form.mdl}>
             校验 MDL
-          </button>
+          </Button>
         </div>
 
         <h3 className="section" style={{ marginTop: 14 }}>
           数据库连接
         </h3>
         <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(3, 1fr)' }}>
-          <input className="input" placeholder="host" value={form.host} onChange={(e) => setField('host', e.target.value)} />
-          <input className="input" placeholder="port" value={form.port} onChange={(e) => setField('port', e.target.value)} />
-          <input className="input" placeholder="database" value={form.database} onChange={(e) => setField('database', e.target.value)} />
-          <input className="input" placeholder="user" value={form.user} onChange={(e) => setField('user', e.target.value)} />
-          <input className="input" type="password" placeholder="password" value={form.password} onChange={(e) => setField('password', e.target.value)} />
+          <Input placeholder="host" value={form.host} onChange={(e) => setField('host', e.target.value)} />
+          <Input placeholder="port" value={form.port} onChange={(e) => setField('port', e.target.value)} />
+          <Input placeholder="database" value={form.database} onChange={(e) => setField('database', e.target.value)} />
+          <Input placeholder="user" value={form.user} onChange={(e) => setField('user', e.target.value)} />
+          <Input type="password" placeholder="password" value={form.password} onChange={(e) => setField('password', e.target.value)} />
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
-          <button className="btn btn-secondary" onClick={() => void testConnection()} disabled={!form.database}>
+          <Button onClick={() => void testConnection()} disabled={!form.database}>
             测试连接
-          </button>
-          <button className="btn" onClick={() => void save()} disabled={loading || !token}>
+          </Button>
+          <Button onClick={() => void save()} disabled={loading || !token}>
             {loading ? '保存中…' : editing ? '保存修改' : '注册 Agent'}
-          </button>
+          </Button>
           {editing ? (
-            <button
-              className="btn btn-secondary"
+            <Button
               onClick={() => {
                 setEditing(null);
                 setForm(EMPTY_FORM);
               }}
             >
               取消编辑
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
@@ -384,21 +384,25 @@ export default function AgentsPage() {
                     {renderPool(statuses[agent.agentId])}
                   </td>
                   <td style={{ padding: '8px 4px' }}>
-                    <button className="btn btn-secondary" style={{ marginRight: 4 }} onClick={() => void loadStatus(agent.agentId)} disabled={busy === agent.agentId}>
+                    <Button style={{ marginRight: 4 }} onClick={() => void loadStatus(agent.agentId)} disabled={busy === agent.agentId}>
                       监控
-                    </button>
-                    <button className="btn btn-secondary" style={{ marginRight: 4 }} onClick={() => void testAgent(agent.agentId)} disabled={busy === agent.agentId}>
+                    </Button>
+                    <Button style={{ marginRight: 4 }} onClick={() => void testAgent(agent.agentId)} disabled={busy === agent.agentId}>
                       测试
-                    </button>
-                    <button className="btn btn-secondary" style={{ marginRight: 4 }} onClick={() => void toggleStatus(agent)} disabled={busy === agent.agentId}>
-                      {agent.status === 'enabled' ? '停用' : '启用'}
-                    </button>
-                    <button className="btn btn-secondary" style={{ marginRight: 4 }} onClick={() => void startEdit(agent)} disabled={busy === agent.agentId}>
+                    </Button>
+                    <span style={{ marginRight: 8, verticalAlign: 'middle' }}>
+                      <Switch
+                        checked={agent.status === 'enabled'}
+                        onChange={() => void toggleStatus(agent)}
+                        disabled={busy === agent.agentId}
+                      />
+                    </span>
+                    <Button style={{ marginRight: 4 }} onClick={() => void startEdit(agent)} disabled={busy === agent.agentId}>
                       编辑
-                    </button>
-                    <button className="btn" onClick={() => void remove(agent.agentId)} disabled={busy === agent.agentId}>
+                    </Button>
+                    <Button onClick={() => void remove(agent.agentId)} disabled={busy === agent.agentId}>
                       删除
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -412,6 +416,16 @@ export default function AgentsPage() {
           ← 返回聊天页
         </a>
       </p>
+
+      <Modal
+        open={Boolean(confirmDelete)}
+        title="注销 Agent"
+        maskClosable
+        onClose={() => setConfirmDelete(null)}
+        onOk={() => confirmDelete && void doDelete(confirmDelete)}
+      >
+        确认注销 Agent「{confirmDelete}」？此操作不可恢复。
+      </Modal>
     </main>
   );
 }
