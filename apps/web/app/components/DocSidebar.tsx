@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
@@ -38,6 +39,14 @@ const GROUPS = ['导航', '业务查询', '系统管理'];
 
 /** 左侧导航栏：分组菜单（契约/保全/理赔/AI 问答/自定义 Agent）。 */
 export default function DocSidebar() {
+  return (
+    <Suspense fallback={<aside className="doc-aside" />}>
+      <DocSidebarInner />
+    </Suspense>
+  );
+}
+
+function DocSidebarInner() {
   const pathname = usePathname();
   const search = useSearchParams();
 

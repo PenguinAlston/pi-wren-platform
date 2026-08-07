@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 function resolveTitle(pathname: string, search: URLSearchParams): { title: string; crumb: string } {
@@ -53,6 +53,14 @@ function useClock(): string {
 
 /** 顶部栏：当前菜单的详细名称 + 面包屑 + 时钟/系统状态。 */
 export default function DocTopbar() {
+  return (
+    <Suspense fallback={<header className="doc-topbar" />}>
+      <DocTopbarInner />
+    </Suspense>
+  );
+}
+
+function DocTopbarInner() {
   const pathname = usePathname();
   const search = useSearchParams();
   const clock = useClock();
