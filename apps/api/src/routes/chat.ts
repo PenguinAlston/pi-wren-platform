@@ -14,7 +14,7 @@ const chatRequestSchema = z.object({
 
 export function createChatHandler(deps: ApiDeps, logger: Logger) {
   return async (req: Request, res: Response) => {
-    const domain = (req.params.domain ?? 'finance') as string;
+    const domain = (req.params.domain ?? 'insurance') as string;
     const spec =
       deps.customAgents?.get(domain) ?? deps.agents.find((agent) => agent.id === domain);
 

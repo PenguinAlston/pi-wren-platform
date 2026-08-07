@@ -7,7 +7,6 @@ import {
   DataAnalysisAgent,
   LlmContextEngine,
   createDataAnalysisTools,
-  financeDomain,
   insuranceDomain,
   type AgentDomainConfig,
   type MemoryStore,
@@ -69,8 +68,8 @@ interface DomainRegistration {
   semanticFile: string;
 }
 
+// 平台当前仅保留保险综合查询 Agent（需求聚焦保险业务；财务等其他领域可按需重新注册）
 const DOMAINS: DomainRegistration[] = [
-  { domain: financeDomain, semanticFile: 'finance.mdl.yml' },
   { domain: insuranceDomain, semanticFile: 'insurance.mdl.yml' },
 ];
 

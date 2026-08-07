@@ -6,8 +6,8 @@
 
 ### 核心链路（已跑通）
 - [x] 中文自然语言 → LLM 动态生成 SQL → 安全校验 → PostgreSQL 执行 → 业务分析摘要
-- [x] 财务 Agent（finance_fact 季度利润/收入/成本分析）
 - [x] 保险 Agent（保单/理赔/保全/核保/赔付率，22 张生产级表 + 字典中文标签）
+- [x] 财务 Agent 已下线（平台当前仅保留保险综合查询；`financeDomain`/`finance.mdl.yml` 保留供测试与按需恢复）
 - [x] 规则引擎降级兜底（LLM 不可用或输出不安全时自动切换，查询不中断）
 - [x] 防幻觉提示词（日期/数值逐字照抄，数据缺失如实说明）
 - [x] SQL 安全校验（统一关口 `database_query`：字符串/注释防绕过、危险函数拦截、表名白名单自动来自 MDL；LLM/规则/Wren/自定义 Agent 全路径生效）
@@ -46,7 +46,7 @@
  │
 Web Chat（:3000）→ Express API（:8080）
  │
-DataAnalysisAgent（内置 财务/保险 + 自定义 Agent 注册表）
+DataAnalysisAgent（内置 保险 + 自定义 Agent 注册表）
  │
 语义层（LLM 动态 SQL / 规则引擎兜底）→ 安全校验（表名白名单）
  │

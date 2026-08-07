@@ -90,17 +90,17 @@ describe('api', () => {
     expect(body.agents.map((a) => a.id)).toEqual(['finance', 'insurance']);
   });
 
-  it('answers a finance question through the default chat route', async () => {
+  it('answers a question through the default chat route (defaults to insurance)', async () => {
     const response = await fetch(`${baseUrl}/api/agent/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: '为什么利润下降？' }),
+      body: JSON.stringify({ message: '各险种赔付率如何？' }),
     });
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { answer: string; sql: string };
-    expect(body.answer).toContain('Q2');
-    expect(body.sql).toContain('finance_fact');
+    expect(body.answer).toContain('重疾险');
+    expect(body.sql).toContain('insurance_policy');
   });
 
   it('answers an insurance question through the domain route', async () => {
