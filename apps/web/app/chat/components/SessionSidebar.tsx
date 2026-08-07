@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Button, Input } from 'animal-island-ui';
+import { useEffect, useRef, useState } from 'react';
+import { Button, Input, Modal } from 'animal-island-ui';
 import { relativeTime } from './chat-utils';
 
 export interface SessionSummary {
@@ -23,7 +23,7 @@ interface Props {
   onDelete: (sessionId: string) => void;
 }
 
-/** 左侧会话栏（需求 4.2-1）：新建、搜索、历史会话列表、删除/重命名。 */
+/** 左侧会话栏（需求 4.2-1）：新建、搜索、会话列表；末尾「⋯」菜单（重命名/删除，同 chat.qwen.ai）。 */
 export default function SessionSidebar({
   sessions,
   activeSessionId,
@@ -36,6 +36,32 @@ export default function SessionSidebar({
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<SessionSummary | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 点击菜单外部 / Esc 关闭菜单
+  useEffect(() => {
+    if (!menuOpenId) {
+      return;
+    }
+    const onDocClick = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpenId(null);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpenId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpenId]);
 
   const commitRename = (sessionId: string) => {
     const name = draft.trim();
@@ -92,42 +118,81 @@ export default function SessionSidebar({
                     onBlur={() => commitRename(session.sessionId)}
                   />
                 ) : (
-                  <>
-                    <div className="chat-session-name">{session.name}</div>
-                    <div className="chat-session-meta">
-                      {relativeTime(session.updatedAt)} · {session.messageCount} 轮
+                  <div className="chat-session-row">
+                    <div className="chat-session-info">
+                      <div className="chat-session-name">{session.name}</div>
+                      <div className="chat-session-meta">
+                        {relativeTime(session.updatedAt)} · {session.messageCount} 轮
+                      </div>
                     </div>
-                    <div className="chat-session-actions" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        type="link"
-                        size="small"
-                        onClick={() => {
-                          setEditingId(session.sessionId);
-                          setDraft(session.name);
-                        }}
+
+                    <Button
+                      type="text"
+                      size="small"
+                      className="chat-session-dots"
+                      aria-label="会话操作"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpenId(menuOpenId === session.sessionId ? null : session.sessionId);
+                      }}
+                    >
+                      ⋯
+                    </Button>
+
+                    {menuOpenId === session.sessionId ? (
+                      <div
+                        className="chat-session-menu"
+                        ref={menuRef}
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        重命名
-                      </Button>
-                      <Button
-                        type="link"
-                        size="small"
-                        danger
-                        onClick={() => {
-                          if (window.confirm(`删除会话「${session.name}」？`)) {
-                            onDelete(session.sessionId);
-                          }
-                        }}
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </>
+                        <Button
+                          type="text"
+                          block
+                          size="small"
+                          onClick={() => {
+                            setEditingId(session.sessionId);
+                            setDraft(session.name);
+                            setMenuOpenId(null);
+                          }}
+                        >
+                          重命名
+                        </Button>
+                        <Button
+                          type="text"
+                          danger
+                          block
+                          size="small"
+                          onClick={() => {
+                            setConfirmDelete(session);
+                            setMenuOpenId(null);
+                          }}
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
                 )}
               </div>
             );
           })
         )}
       </div>
+
+      <Modal
+        open={Boolean(confirmDelete)}
+        title="删除会话"
+        maskClosable
+        onClose={() => setConfirmDelete(null)}
+        onOk={() => {
+          if (confirmDelete) {
+            onDelete(confirmDelete.sessionId);
+          }
+          setConfirmDelete(null);
+        }}
+      >
+        确认删除会话「{confirmDelete?.name}」？删除后不可恢复。
+      </Modal>
     </aside>
   );
 }

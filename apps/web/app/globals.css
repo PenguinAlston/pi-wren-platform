@@ -808,6 +808,12 @@ textarea,
 }
 
 .chat-rename-input {
+  display: block;
+  width: 100%;
+}
+
+.chat-rename-input input {
+  width: 100%;
   height: 32px;
   font-size: 13px;
 }
@@ -1492,4 +1498,46 @@ textarea,
   .doc-menu-group {
     margin-bottom: var(--animal-spacing-sm);
   }
+}
+
+/* ===== 会话项「⋯」菜单（chat.qwen.ai 风格） ===== */
+.chat-session-item {
+  position: relative;
+}
+
+.chat-session-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.chat-session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-session-dots {
+  flex: 0 0 auto;
+  line-height: 1;
+  opacity: 0.65;
+}
+
+.chat-session-item:hover .chat-session-dots {
+  opacity: 1;
+}
+
+.chat-session-menu {
+  position: absolute;
+  right: 8px;
+  top: 32px;
+  z-index: 40;
+  min-width: 116px;
+  background: var(--animal-bg-color);
+  border: var(--animal-border-width) solid var(--animal-border-color);
+  border-radius: var(--animal-border-radius-base);
+  padding: 6px;
+  box-shadow: var(--animal-shadow-base);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
