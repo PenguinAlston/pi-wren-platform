@@ -1,0 +1,32 @@
+name: ins_preserve_main
+table_reference:
+  schema: public
+  table: ins_preserve_main
+columns:
+  - name: preserve_id
+    type: VARCHAR
+    properties:
+      description: 保全单号
+  - name: policy_id
+    type: VARCHAR
+    properties:
+      description: 保单ID
+  - name: preserve_type
+    type: VARCHAR
+    properties:
+      description: 保全类型（01信息变更 02缴费变更 03受益人变更 04保额调整 05保单复效 06保单挂失 07退保申请）
+  - name: preserve_status
+    type: VARCHAR
+    properties:
+      description: 保全状态（01待审核 02审核通过 03审核驳回 04已办结 05已撤销）
+  - name: apply_time
+    type: TIMESTAMP
+    properties:
+      description: 申请时间
+  - name: change_desc
+    type: VARCHAR
+    properties:
+      description: 变更描述
+properties:
+  description: 保全主表（保单变更，policy_id 关联保单）
+primary_key: preserve_id

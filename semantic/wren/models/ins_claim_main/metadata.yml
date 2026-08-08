@@ -1,0 +1,52 @@
+name: ins_claim_main
+table_reference:
+  schema: public
+  table: ins_claim_main
+columns:
+  - name: claim_id
+    type: VARCHAR
+    properties:
+      description: 理赔号
+  - name: policy_id
+    type: VARCHAR
+    properties:
+      description: 保单ID（关联 ins_policy_main.policy_id）
+  - name: claim_type
+    type: VARCHAR
+    properties:
+      description: 理赔类型
+  - name: claim_status
+    type: VARCHAR
+    properties:
+      description: 理赔状态（01待立案 02待查勘 03审核中 04赔付中 05已结案 06拒赔 07撤销报案）
+  - name: insured_id
+    type: VARCHAR
+    properties:
+      description: 被保人客户ID
+  - name: accident_time
+    type: TIMESTAMP
+    properties:
+      description: 出险时间
+  - name: report_time
+    type: TIMESTAMP
+    properties:
+      description: 报案时间
+  - name: apply_claim_amount
+    type: DECIMAL
+    properties:
+      description: 申请赔付金额
+  - name: actual_claim_amount
+    type: DECIMAL
+    properties:
+      description: 实际赔付金额
+  - name: close_time
+    type: TIMESTAMP
+    properties:
+      description: 结案时间
+  - name: claim_reason
+    type: VARCHAR
+    properties:
+      description: 出险原因
+properties:
+  description: 理赔主表（policy_id 关联保单）
+primary_key: claim_id

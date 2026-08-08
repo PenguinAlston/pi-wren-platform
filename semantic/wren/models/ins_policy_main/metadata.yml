@@ -1,0 +1,84 @@
+name: ins_policy_main
+table_reference:
+  schema: public
+  table: ins_policy_main
+columns:
+  - name: policy_id
+    type: VARCHAR
+    properties:
+      description: 保单ID（关联键）
+  - name: policy_no
+    type: VARCHAR
+    properties:
+      description: 保单号
+  - name: product_id
+    type: VARCHAR
+    properties:
+      description: 产品ID
+  - name: product_type
+    type: VARCHAR
+    properties:
+      description: 险种类型（字典编码 01重疾/02医疗/03意外/04寿险/05年金/06财产险）
+  - name: product_name
+    type: VARCHAR
+    properties:
+      description: 险种名称
+  - name: policy_status
+    type: VARCHAR
+    properties:
+      description: 保单状态（01待核保 02承保有效 03暂保单 04已退保 05已终止 06已失效）
+  - name: applicant_id
+    type: VARCHAR
+    properties:
+      description: 投保人客户ID
+  - name: insured_id
+    type: VARCHAR
+    properties:
+      description: 被保人客户ID
+  - name: apply_date
+    type: DATE
+    properties:
+      description: 投保日期
+  - name: effect_date
+    type: DATE
+    properties:
+      description: 生效日期
+  - name: end_date
+    type: DATE
+    properties:
+      description: 终止日期
+  - name: year_premium
+    type: DECIMAL
+    properties:
+      description: 年交保费
+  - name: total_premium
+    type: DECIMAL
+    properties:
+      description: 总保费
+  - name: total_amount
+    type: DECIMAL
+    properties:
+      description: 累计保额
+  - name: pay_type
+    type: VARCHAR
+    properties:
+      description: 缴费方式
+  - name: pay_year
+    type: INTEGER
+    properties:
+      description: 缴费年限
+  - name: channel_type
+    type: VARCHAR
+    properties:
+      description: 投保渠道
+  - name: org_code
+    type: VARCHAR
+    properties:
+      description: 承保机构
+  - name: underwrite_result
+    type: VARCHAR
+    properties:
+      description: 核保结果
+properties:
+  description: 保单主表（契约业务核心）
+primary_key: policy_id

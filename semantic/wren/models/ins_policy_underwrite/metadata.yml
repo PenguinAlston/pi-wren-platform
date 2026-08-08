@@ -1,0 +1,32 @@
+name: ins_policy_underwrite
+table_reference:
+  schema: public
+  table: ins_policy_underwrite
+columns:
+  - name: underwrite_id
+    type: VARCHAR
+    properties:
+      description: 核保记录ID
+  - name: policy_id
+    type: VARCHAR
+    properties:
+      description: 保单ID
+  - name: underwrite_time
+    type: TIMESTAMP
+    properties:
+      description: 核保时间
+  - name: underwrite_type
+    type: VARCHAR
+    properties:
+      description: 核保类型
+  - name: underwrite_result
+    type: VARCHAR
+    properties:
+      description: 核保结果（01通过 02拒保 03延期 04加费承保）
+  - name: add_fee_rate
+    type: DECIMAL
+    properties:
+      description: 加费比例
+properties:
+  description: 保单核保记录（policy_id 关联保单）
+primary_key: underwrite_id

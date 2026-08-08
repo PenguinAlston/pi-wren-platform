@@ -1,0 +1,6 @@
+schema_version: 5
+name: insurance
+catalog: wren
+schema: public
+data_source: postgres
+profile: insurance-db

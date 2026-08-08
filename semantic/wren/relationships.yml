@@ -1,0 +1,31 @@
+relationships:
+  - name: claim_policy
+    models:
+      - ins_claim_main
+      - ins_policy_main
+    join_type: MANY_TO_ONE
+    condition: ins_claim_main.policy_id = ins_policy_main.policy_id
+  - name: preserve_policy
+    models:
+      - ins_preserve_main
+      - ins_policy_main
+    join_type: MANY_TO_ONE
+    condition: ins_preserve_main.policy_id = ins_policy_main.policy_id
+  - name: underwrite_policy
+    models:
+      - ins_policy_underwrite
+      - ins_policy_main
+    join_type: MANY_TO_ONE
+    condition: ins_policy_underwrite.policy_id = ins_policy_main.policy_id
+  - name: policy_insured
+    models:
+      - ins_policy_main
+      - ins_customer
+    join_type: MANY_TO_ONE
+    condition: ins_policy_main.insured_id = ins_customer.customer_id
+  - name: policy_applicant
+    models:
+      - ins_policy_main
+      - ins_customer
+    join_type: MANY_TO_ONE
+    condition: ins_policy_main.applicant_id = ins_customer.customer_id

@@ -1,0 +1,19 @@
+name: sys_dict
+table_reference:
+  schema: public
+  table: sys_dict
+columns:
+  - name: dict_type
+    type: VARCHAR
+    properties:
+      description: 字典类型
+  - name: dict_value
+    type: VARCHAR
+    properties:
+      description: 字典值
+  - name: dict_label
+    type: VARCHAR
+    properties:
+      description: 字典中文标签
+properties:
+  description: 业务字典表（dict_type + dict_value -> dict_label 中文标签）

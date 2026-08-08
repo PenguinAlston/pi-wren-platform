@@ -1,0 +1,24 @@
+name: ins_customer
+table_reference:
+  schema: public
+  table: ins_customer
+columns:
+  - name: customer_id
+    type: VARCHAR
+    properties:
+      description: 客户ID
+  - name: customer_name
+    type: VARCHAR
+    properties:
+      description: 客户姓名
+  - name: gender
+    type: VARCHAR
+    properties:
+      description: 性别
+  - name: phone
+    type: VARCHAR
+    properties:
+      description: 电话
+properties:
+  description: 客户表
+primary_key: customer_id

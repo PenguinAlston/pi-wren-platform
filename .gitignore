@@ -34,3 +34,7 @@ pnpm-debug.log*
 
 # Runtime data (pi session jsonl)
 data/
+
+# Wren semantic project build artifacts
+semantic/wren/target/
+semantic/wren/.wren/
