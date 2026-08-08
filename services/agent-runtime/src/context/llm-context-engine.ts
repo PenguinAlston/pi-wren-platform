@@ -12,7 +12,7 @@ export interface LlmContextEngineOptions {
   maxSqlLength?: number;
 }
 
-const SYSTEM_PROMPT =
+export const SYSTEM_PROMPT =
   'You are a senior BI engineer writing PostgreSQL for an enterprise business data platform. ' +
   'Return ONLY a single read-only SQL statement (SELECT or WITH). ' +
   'No explanations, no markdown. Never modify data. ' +
@@ -74,7 +74,7 @@ function buildSqlPrompt(question: string, config: SemanticConfig): string {
 const HISTORY_INJECTION_TURNS = 3;
 
 /** 把最近几轮对话格式化为提示词片段（只用于指代消解，禁止据此编造数据）。 */
-function buildHistoryBlock(history: ConversationTurn[]): string {
+export function buildHistoryBlock(history: ConversationTurn[]): string {
   const lines = [
     'Recent conversation of this session (context only, never invent data from it):',
   ];

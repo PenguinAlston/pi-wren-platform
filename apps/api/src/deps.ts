@@ -6,6 +6,7 @@ import {
 import {
   DataAnalysisAgent,
   LlmContextEngine,
+  WrenCliContextEngine,
   createDataAnalysisTools,
   insuranceDomain,
   type AgentDomainConfig,
@@ -22,6 +23,7 @@ import {
 import {
   ConfigDrivenContextEngine,
   WrenContextEngine,
+  WrenCli,
   loadSemanticConfig,
   resolveSemanticFile,
   type ContextEngine,
@@ -31,6 +33,7 @@ import { InsuranceQueryService } from '@pi-wren/insurance-query';
 import { createDefaultSqlExecutor, createPool, type SqlExecutor } from '@pi-wren/data-engine';
 import { PiSessionStore } from '@pi-wren/pi-bridge';
 import type { MetricDefinition } from '@pi-wren/shared-types';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ApiConfig } from './config';
 import { createCustomAgentFactory } from './custom-agent-factory';
@@ -92,6 +95,18 @@ interface BuiltContext {
   semanticConfig?: SemanticConfig;
 }
 
+/** 解析 Wren CLI 项目目录：优先显式配置，其次仓库 semantic/wren。 */
+function resolveWrenProjectDir(config: ApiConfig): string | undefined {
+  if (config.WREN_PROJECT_DIR) return config.WREN_PROJECT_DIR;
+  for (const candidate of [
+    join(process.cwd(), 'semantic/wren'),
+    join(process.cwd(), '../../semantic/wren'),
+  ]) {
+    if (existsSync(join(candidate, 'wren_project.yml'))) return candidate;
+  }
+  return undefined;
+}
+
 function buildContext(
   config: ApiConfig,
   semanticFile: string,
@@ -105,11 +120,20 @@ function buildContext(
     : resolveSemanticFile(semanticFile);
   const semanticConfig = loadSemanticConfig(path);
   const configEngine = new ConfigDrivenContextEngine(semanticConfig);
+  if (!model) {
+    return { context: configEngine, semanticConfig };
+  }
+  // 新版 Wren CLI（wrenai）受治理模式：显式配置 WREN_BIN 且项目就绪时启用
+  const wrenProjectDir = resolveWrenProjectDir(config);
+  if (config.WREN_BIN && wrenProjectDir) {
+    const cli = new WrenCli({ bin: config.WREN_BIN, projectDir: wrenProjectDir });
+    return {
+      context: new WrenCliContextEngine({ model, cli, config: semanticConfig, fallback: configEngine }),
+      semanticConfig,
+    };
+  }
   // 配置了真实 LLM 时启用动态 SQL 生成，规则引擎作为降级兜底
-  const context = model
-    ? new LlmContextEngine({ model, config: semanticConfig, fallback: configEngine })
-    : configEngine;
-  return { context, semanticConfig };
+  return { context: new LlmContextEngine({ model, config: semanticConfig, fallback: configEngine }), semanticConfig };
 }
 
 async function buildBuiltinAgents(
@@ -182,6 +206,7 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
     {
       provider: model?.name ?? 'none',
       wren: Boolean(config.WREN_URL),
+      wrenCli: Boolean(config.WREN_BIN && resolveWrenProjectDir(config)),
       domains: agents.map((a) => a.id),
       customAgents: agents.filter((a) => a.source === 'custom').length,
     },

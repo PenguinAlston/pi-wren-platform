@@ -3,3 +3,4 @@ export * from './demo-sql-generator';
 export * from './metrics';
 export * from './wren/client';
 export * from './mdl';
+export * from './wren/cli';
