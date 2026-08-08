@@ -16,7 +16,7 @@ function makeConfig(agentId: string, overrides: Partial<CustomAgentConfig> = {})
     agentId,
     name: `Agent ${agentId}`,
     label: `Agent ${agentId}`,
-    mdl: 'name: demo\nmodels:\n  - name: t\n    table: demo_table',
+    projectJson: '{"models":[{"name":"t","tableReference":{"table":"demo_table"}}]}',
     db: { host: 'localhost', port: 5432, database: 'demo', user: 'demo', password: 'demo' },
     status: 'enabled',
     ...overrides,
@@ -90,12 +90,12 @@ describe('AgentRegistry', () => {
     const store = new InMemoryAgentConfigStore();
     const { registry } = makeRegistry(store);
     await registry.register(makeConfig('erp', { label: 'Old' }));
-    const updated = await registry.update('erp', { label: 'New', mdl: 'name: new\nmodels: []' });
+    const updated = await registry.update('erp', { label: 'New', projectJson: '{"models":[{"name":"new","tableReference":{"table":"new_table"}}]}' });
     expect(updated?.label).toBe('New');
     expect(registry.get('erp')?.label).toBe('New');
     const record = await store.findByAgentId('erp');
     expect(record?.label).toBe('New');
-    expect(record?.mdl).toContain('name: new');
+    expect(record?.projectJson).toContain('new_table');
   });
 
   it('keeps old instance when update build fails', async () => {

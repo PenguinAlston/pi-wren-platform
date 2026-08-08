@@ -5,11 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { createModelProvider } from '@pi-wren/agent-sdk';
-import {
-  ConfigDrivenContextEngine,
-  WrenCli,
-  loadSemanticConfig,
-} from '@pi-wren/context-engine';
+import { WrenCli } from '@pi-wren/context-engine';
 import { WrenCliContextEngine } from '@pi-wren/agent-runtime';
 
 // 手动加载 .env（不打印任何密钥）
@@ -29,14 +25,8 @@ async function main(): Promise<void> {
     baseUrl: process.env.OPENAI_BASE_URL,
     model: process.env.OPENAI_MODEL,
   });
-  const semanticConfig = loadSemanticConfig('semantic/insurance.mdl.yml');
   const cli = new WrenCli({ bin: WREN_BIN, projectDir: WREN_PROJECT });
-  const engine = new WrenCliContextEngine({
-    model,
-    cli,
-    config: semanticConfig,
-    fallback: new ConfigDrivenContextEngine(semanticConfig),
-  });
+  const engine = new WrenCliContextEngine({ model, cli });
 
   console.log(`[e2e] question: ${QUESTION}`);
   const sql = await engine.generateSQL(QUESTION);

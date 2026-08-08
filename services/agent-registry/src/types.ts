@@ -7,8 +7,8 @@ export interface CustomAgentConfig {
   label: string;
   description?: string;
   systemPrompt?: string;
-  /** MDL YAML 原文。 */
-  mdl: string;
+  /** WrenAI 工程序列化 JSON（`wren context init --from-mdl` 产出的 MDL JSON）。 */
+  projectJson: string;
   /** 数据库连接配置。 */
   db: DatabaseConfig;
   status: 'enabled' | 'disabled';
@@ -24,7 +24,7 @@ export interface AgentConfigRecord {
   label: string;
   description: string | null;
   systemPrompt: string | null;
-  mdl: string;
+  projectJson: string;
   dbConnectionEnc: string;
   status: string;
   lastError: string | null;

@@ -1,5 +1,3 @@
-import type { SemanticConfig } from '@pi-wren/context-engine';
-
 const DANGEROUS_KEYWORDS =
   /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|vacuum|execute|call|merge|replace|do|comment)\b/i;
 
@@ -21,25 +19,31 @@ export function normalizeForInspection(sql: string): string {
 }
 
 /**
- * 解析并校验 SQL（所有执行路径的统一关口）：
- * - 剥离 Markdown 代码块
- * - 仅允许只读 SELECT/WITH
- * - 禁止高危/删改语句、危险函数、多语句注入（含注释/字符串内绕过）
- * - 表名必须在语义配置声明的模型（或 sys_dict 字典表）范围内；config 缺失时跳过表名检查
+ * 从 LLM 原始输出中提取 SQL：剥离 Markdown 代码块（```sql ... ```）、去尾部分号。
+ * 与 parseAndValidateSql 共用，WrenCliContextEngine 喂给 wren dry-run 前也用它清洗。
  */
-export function parseAndValidateSql(
-  raw: string,
-  config?: SemanticConfig,
-  maxLength = 2000,
-): string {
+export function extractSql(raw: string): string {
   let sql = raw.trim();
-
   const fence = sql.match(/```(?:sql)?\s*([\s\S]*?)```/i);
   if (fence) {
     sql = fence[1]?.trim() ?? '';
   }
+  return sql.replace(/;\s*$/, '').trim();
+}
 
-  sql = sql.replace(/;\s*$/, '').trim();
+/**
+ * 解析并校验 SQL（所有执行路径的统一关口）：
+ * - 剥离 Markdown 代码块
+ * - 仅允许只读 SELECT/WITH
+ * - 禁止高危/删改语句、危险函数、多语句注入（含注释/字符串内绕过）
+ * - 表名必须在白名单（来自 WrenAI 工程的 table_reference）范围内；白名单缺失时跳过表名检查
+ */
+export function parseAndValidateSql(
+  raw: string,
+  allowedTables?: string[],
+  maxLength = 2000,
+): string {
+  let sql = extractSql(raw);
 
   if (!sql) {
     throw new Error('LLM 返回了空 SQL');
@@ -64,15 +68,13 @@ export function parseAndValidateSql(
     throw new Error('不允许执行多条语句');
   }
 
-  if (!config) {
-    // 无语义配置（如 Wren 路径）时跳过表名白名单，其余检查保留
+  if (!allowedTables || allowedTables.length === 0) {
+    // 无表名白名单（如未提供工程信息）时跳过表名检查，其余检查保留
     return sql;
   }
 
   const clean = normalized.replace(/"/g, '');
-  const allowed = new Set(
-    [...config.models.map((m) => m.table), 'sys_dict'].map((t) => t.toLowerCase()),
-  );
+  const allowed = new Set(allowedTables.map((t) => t.toLowerCase()));
   // CTE 名称放行（WITH x AS (...) 中的 x 不是物理表）
   for (const match of clean.matchAll(/\bwith\s+([a-z_][a-z0-9_]*)\s+as\b/gi)) {
     allowed.add((match[1] ?? '').toLowerCase());

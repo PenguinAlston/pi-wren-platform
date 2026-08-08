@@ -206,18 +206,17 @@ function buildAdminDeps(base: ApiDeps): { deps: ApiDeps; server: Server; baseUrl
   return { deps, server, baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}` };
 }
 
-const VALID_MDL = `name: demo
-models:
-  - name: product
-    table: demo_product
-    columns:
-      - name: id
-        type: integer
-intents:
-  - name: count_all
-    keywords: [有多少, 数量]
-    sql: SELECT COUNT(*) FROM demo_product
-`;
+const VALID_PROJECT = JSON.stringify({
+  catalog: 'demo',
+  schema: 'public',
+  models: [
+    {
+      name: 'product',
+      tableReference: { catalog: '', schema: 'public', table: 'demo_product' },
+      columns: [{ name: 'id', type: 'integer' }],
+    },
+  ],
+});
 
 describe('admin agents api', () => {
   const admin = buildAdminDeps(deps);
@@ -242,20 +241,20 @@ describe('admin agents api', () => {
     expect(badToken.status).toBe(401);
   });
 
-  it('validates MDL without persisting', async () => {
-    const ok = await fetch(`${base}/api/admin/agents/validate`, {
+  it('validates WrenAI project without persisting', async () => {
+    const ok = await fetch(`${base}/api/admin/agents/validate-project`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
-      body: JSON.stringify({ mdl: VALID_MDL }),
+      body: JSON.stringify({ project: VALID_PROJECT }),
     });
     expect(ok.status).toBe(200);
     const body = (await ok.json()) as { models: string[] };
     expect(body.models).toContain('demo_product');
 
-    const bad = await fetch(`${base}/api/admin/agents/validate`, {
+    const bad = await fetch(`${base}/api/admin/agents/validate-project`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-token': ADMIN_TOKEN },
-      body: JSON.stringify({ mdl: 'name: x' }),
+      body: JSON.stringify({ project: 'not-json' }),
     });
     expect(bad.status).toBe(400);
   });
@@ -268,7 +267,7 @@ describe('admin agents api', () => {
         agentId: 'my-erp',
         name: 'ERP 查询',
         label: 'ERP 系统查询',
-        mdl: VALID_MDL,
+        project: VALID_PROJECT,
         db: { host: 'localhost', port: 5432, database: 'erp', user: 'demo', password: 'p@ss' },
       }),
     });
@@ -276,11 +275,11 @@ describe('admin agents api', () => {
 
     const list = (await fetch(`${base}/api/admin/agents`, {
       headers: { 'x-admin-token': ADMIN_TOKEN },
-    }).then((r) => r.json())) as { agents: { agentId: string; connection: string; mdl?: string }[] };
+    }).then((r) => r.json())) as { agents: { agentId: string; connection: string; project?: string }[] };
     const created = list.agents.find((a) => a.agentId === 'my-erp');
     expect(created?.connection).toContain('***@');
     expect(created?.connection).not.toContain('p@ss');
-    expect(created?.mdl).toBeUndefined(); // 列表不返回 mdl
+    expect(created?.project).toBeUndefined(); // 列表不返回 project
 
     const publicList = (await fetch(`${base}/api/agents`).then((r) => r.json())) as {
       agents: { id: string; source: string }[];
@@ -296,7 +295,7 @@ describe('admin agents api', () => {
         agentId: 'my-erp',
         name: 'Again',
         label: 'Again',
-        mdl: VALID_MDL,
+        project: VALID_PROJECT,
         db: { database: 'erp', user: 'u', password: 'p' },
       }),
     });
@@ -313,7 +312,7 @@ describe('admin agents api', () => {
         name: 'A',
         label: 'A',
         ownerId: 'team-1',
-        mdl: VALID_MDL,
+        project: VALID_PROJECT,
         db: { database: 'a', user: 'u', password: 'p' },
       }),
     });
@@ -353,9 +352,9 @@ describe('admin agents api', () => {
 
     const detail = (await fetch(`${base}/api/admin/agents/my-erp`, {
       headers: { 'x-admin-token': ADMIN_TOKEN },
-    }).then((r) => r.json())) as { agent: { label: string; mdl: string } };
+    }).then((r) => r.json())) as { agent: { label: string; project: string } };
     expect(detail.agent.label).toBe('ERP 新名称');
-    expect(detail.agent.mdl).toContain('demo_product');
+    expect(detail.agent.project).toContain('demo_product');
 
     const del = await fetch(`${base}/api/admin/agents/my-erp`, {
       method: 'DELETE',

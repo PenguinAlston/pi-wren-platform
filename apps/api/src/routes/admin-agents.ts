@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { NextFunction, Request, Response } from 'express';
 import type { AgentRegistry } from '@pi-wren/agent-registry';
 import { createPool, type DatabaseConfig } from '@pi-wren/data-engine';
-import { parseSemanticConfig } from '@pi-wren/context-engine';
 import type { AgentSpec, ApiDeps } from '../deps';
 
 const dbSchema = z.object({
@@ -23,7 +22,7 @@ const createAgentSchema = z.object({
   label: z.string().trim().min(1).max(128),
   description: z.string().trim().max(2000).optional(),
   systemPrompt: z.string().trim().max(8000).optional(),
-  mdl: z.string().trim().min(10, 'MDL 内容过短').max(262_144, 'MDL 超过 256KB'),
+  project: z.string().trim().min(10, 'WrenAI 工程 JSON 过短').max(262_144, '工程 JSON 超过 256KB'),
   db: dbSchema,
   ownerId: z.string().trim().max(64).optional(),
 });
@@ -33,7 +32,7 @@ const updateAgentSchema = createAgentSchema
   .omit({ agentId: true })
   .extend({ status: z.enum(['enabled', 'disabled']).optional() });
 
-const validateMdlSchema = z.object({ mdl: z.string().trim().min(10).max(262_144) });
+const validateProjectSchema = z.object({ project: z.string().trim().min(10).max(262_144) });
 
 /** 把用户提交的连接配置归一化为 DatabaseConfig（补默认 host/port）。 */
 function normalizeDb(db: z.infer<typeof dbSchema>): DatabaseConfig {
@@ -72,7 +71,7 @@ function ensureRegistry(deps: ApiDeps, res: Response): AgentRegistry<AgentSpec> 
   return deps.customAgents;
 }
 
-function toPublicView(record: Awaited<ReturnType<AgentRegistry<AgentSpec>['getRecord']>>, includeMdl: boolean) {
+function toPublicView(record: Awaited<ReturnType<AgentRegistry<AgentSpec>['getRecord']>>, includeProject: boolean) {
   if (!record) return undefined;
   return {
     id: record.id,
@@ -81,7 +80,7 @@ function toPublicView(record: Awaited<ReturnType<AgentRegistry<AgentSpec>['getRe
     label: record.label,
     description: record.description,
     systemPrompt: record.systemPrompt,
-    mdl: includeMdl ? record.mdl : undefined,
+    project: includeProject ? record.projectJson : undefined,
     connection: record.connectionMask,
     status: record.status,
     lastError: record.lastError,
@@ -100,18 +99,19 @@ export function createAdminAgentHandler(deps: ApiDeps) {
       res.status(400).json({ error: 'invalid request', details: parsed.error.flatten() });
       return;
     }
-    const { agentId, db, ...config } = parsed.data;
+    const { agentId, db, project, ...config } = parsed.data;
     try {
       const instance = await registry.register({
         agentId,
         ...config,
+        projectJson: project,
         db: normalizeDb(db),
         ownerId: parsed.data.ownerId,
       });
       await deps.audit?.log({
         operType: 'agent_register',
         operContent: `注册自定义 Agent：${agentId}（${config.label}）`,
-        sqlContent: `mdl=${parsed.data.mdl.length} chars`,
+        sqlContent: `project=${project.length} chars`,
         ipAddress: req.ip,
       });
       res.status(201).json({
@@ -162,7 +162,7 @@ export function updateAdminAgentHandler(deps: ApiDeps) {
       res.status(400).json({ error: 'invalid request', details: parsed.error.flatten() });
       return;
     }
-    const { db, ...patch } = parsed.data;
+    const { db, project, ...patch } = parsed.data;
     const agentId = req.params.agentId as string;
     try {
       const before = await registry.getRecord(agentId);
@@ -172,13 +172,14 @@ export function updateAdminAgentHandler(deps: ApiDeps) {
       }
       await registry.update(agentId, {
         ...patch,
+        ...(project !== undefined ? { projectJson: project } : {}),
         ...(db ? { db: normalizeDb(db) } : {}),
       });
       const operType = patch.status && patch.status !== before.status ? 'agent_status' : 'agent_update';
       await deps.audit?.log({
         operType,
         operContent: `${operType === 'agent_status' ? '变更状态' : '更新配置'}：${agentId}（${before.name}）`,
-        sqlContent: patch.mdl ? `mdl=${patch.mdl.length} chars` : undefined,
+        sqlContent: project ? `project=${project.length} chars` : undefined,
         ipAddress: req.ip,
       });
       res.json({ agent: { id: agentId, label: before.label, source: 'custom' } });
@@ -277,24 +278,28 @@ export function agentStatusHandler(deps: ApiDeps) {
   };
 }
 
-/** 仅校验 MDL（不落库、不建实例），供前端实时校验。 */
-export function validateMdlHandler(_deps: ApiDeps) {
+/** 仅校验 WrenAI 工程 JSON（不落库、不建实例），供前端实时校验。 */
+export function validateProjectHandler(_deps: ApiDeps) {
   return (req: Request, res: Response) => {
-    const parsed = validateMdlSchema.safeParse(req.body);
+    const parsed = validateProjectSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'invalid request', details: parsed.error.flatten() });
       return;
     }
     try {
-      const config = parseSemanticConfig(parsed.data.mdl);
+      const project = JSON.parse(parsed.data.project) as { models?: unknown };
+      if (!Array.isArray(project.models) || project.models.length === 0) {
+        throw new Error('工程 JSON 必须包含非空 models 数组');
+      }
       res.json({
         ok: true,
-        models: config.models.map((m) => m.table),
-        intents: config.intents.length,
+        models: (project.models as Array<{ tableReference?: { table?: string }; name?: string }>).map(
+          (m) => m.tableReference?.table ?? m.name ?? '(unnamed)',
+        ),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      res.status(400).json({ ok: false, error: `MDL 校验失败：${message}` });
+      res.status(400).json({ ok: false, error: `WrenAI 工程校验失败：${message}` });
     }
   };
 }

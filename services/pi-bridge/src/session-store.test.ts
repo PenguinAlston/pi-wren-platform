@@ -79,7 +79,10 @@ describe('SSE formatting', () => {
     };
     const frame = formatSseEvent(event);
     expect(frame).toContain('event: tool_call');
-    expect(frame).toContain('"label":"生成 SQL"');
+    // 中文被转义为 \uXXXX（纯 ASCII，避免代理层编码损坏），解析后应还原
+    expect(frame).not.toContain('生成 SQL');
+    const dataLine = frame.split('\n').find((l) => l.startsWith('data: '))!.slice(6);
+    expect(JSON.parse(dataLine).label).toBe('生成 SQL');
     expect(frame.endsWith('\n\n')).toBe(true);
 
     const done = formatSseDone({

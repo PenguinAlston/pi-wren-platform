@@ -80,7 +80,7 @@ export class AgentRegistry<T extends { id: string }> {
       status: patch.status ?? current.status,
     };
     const hasConfigChange =
-      patch.mdl !== undefined ||
+      patch.projectJson !== undefined ||
       patch.db !== undefined ||
       patch.name !== undefined ||
       patch.label !== undefined ||
@@ -94,7 +94,7 @@ export class AgentRegistry<T extends { id: string }> {
         ...(patch.label !== undefined ? { label: merged.label } : {}),
         ...(patch.description !== undefined ? { description: merged.description ?? null } : {}),
         ...(patch.systemPrompt !== undefined ? { systemPrompt: merged.systemPrompt ?? null } : {}),
-        ...(patch.mdl !== undefined ? { mdl: merged.mdl } : {}),
+        ...(patch.projectJson !== undefined ? { projectJson: merged.projectJson } : {}),
         ...(patch.db !== undefined ? { dbConnectionEnc: this.encryptDb(merged.db) } : {}),
         status: merged.status,
         lastError: null,
@@ -115,7 +115,7 @@ export class AgentRegistry<T extends { id: string }> {
       label: merged.label,
       description: merged.description ?? null,
       systemPrompt: merged.systemPrompt ?? null,
-      mdl: merged.mdl,
+      projectJson: merged.projectJson,
       dbConnectionEnc: this.encryptDb(merged.db),
       status: merged.status,
       lastError: null,
@@ -181,7 +181,7 @@ export class AgentRegistry<T extends { id: string }> {
       label: record.label,
       description: record.description ?? undefined,
       systemPrompt: record.systemPrompt ?? undefined,
-      mdl: record.mdl,
+      projectJson: record.projectJson,
       db: this.decryptDb(record.dbConnectionEnc),
       status: record.status === 'disabled' ? 'disabled' : 'enabled',
       ownerId: record.ownerId ?? undefined,
@@ -195,7 +195,7 @@ export class AgentRegistry<T extends { id: string }> {
       label: config.label,
       description: config.description ?? null,
       systemPrompt: config.systemPrompt ?? null,
-      mdl: config.mdl,
+      projectJson: config.projectJson,
       dbConnectionEnc: this.encryptDb(config.db),
       status: config.status,
       lastError: null,

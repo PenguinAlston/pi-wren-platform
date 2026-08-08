@@ -94,11 +94,16 @@ export class WrenCli {
   }
 
   private run(args: string[]): Promise<{ stdout: string; stderr: string }> {
+    // Windows 上只有 .cmd/.bat 包装器需要 shell；真正的 .exe（如 wren.exe）不用 shell，
+    // 否则含空格/换行的 SQL 参数会被 shell 错误拆分成多个参数。
+    const needsShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(this.bin);
     return execFileAsync(this.bin, args, {
       cwd: this.projectDir,
       timeout: this.timeoutMs,
       maxBuffer: 16 * 1024 * 1024,
       killSignal: 'SIGKILL',
+      ...(needsShell ? { shell: true } : {}),
+      windowsVerbatimArguments: !needsShell,
     });
   }
 }

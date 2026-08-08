@@ -31,13 +31,10 @@ const envSchema = z.object({
   OLLAMA_BASE_URL: z.string().optional(),
   OLLAMA_MODEL: z.string().optional(),
 
-  WREN_URL: z.string().optional(),
-  WREN_TOKEN: z.string().optional(),
-  // 新版 Wren CLI（wrenai）接入：WREN_BIN 指向 wren 可执行（默认 'wren'），
+  // Wren CLI（wrenai）受治理语义层：WREN_BIN 指向 wren 可执行（默认 'wren'），
   // WREN_PROJECT_DIR 指向 wren_project.yml 所在目录（默认仓库 semantic/wren）
   WREN_BIN: z.string().optional(),
   WREN_PROJECT_DIR: z.string().optional(),
-  SEMANTIC_DIR: z.string().optional(),
 
   // 会话持久化目录（开源 Pi jsonl 存储），默认 <cwd>/data/sessions
   SESSION_DIR: z.string().optional(),

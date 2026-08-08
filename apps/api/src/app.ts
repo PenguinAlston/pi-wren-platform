@@ -13,7 +13,7 @@ import {
   testDbConnectionHandler,
   agentStatusHandler,
   updateAdminAgentHandler,
-  validateMdlHandler,
+  validateProjectHandler,
 } from './routes/admin-agents';
 import { createChatHandler } from './routes/chat';
 import { createChatStreamHandler } from './routes/chat-stream';
@@ -63,7 +63,7 @@ export function createApp(deps: ApiDeps) {
   app.get('/api/admin/agents/:agentId/status', adminAuth, agentStatusHandler(deps));
   app.post('/api/admin/agents/test', adminAuth, testDbConnectionHandler(deps));
   app.post('/api/admin/agents/:agentId/test', adminAuth, testAgentConnectionHandler(deps));
-  app.post('/api/admin/agents/validate', adminAuth, validateMdlHandler(deps));
+  app.post('/api/admin/agents/validate-project', adminAuth, validateProjectHandler(deps));
 
   app.use((_req, res) => {
     res.status(404).json({ error: 'Not found' });

@@ -162,6 +162,7 @@ export default function SessionSidebar({
                           danger
                           block
                           size="small"
+                          style={{ color: 'var(--animal-error-color, #e05a5a)' }}
                           onClick={() => {
                             setConfirmDelete(session);
                             setMenuOpenId(null);

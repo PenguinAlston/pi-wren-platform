@@ -47,6 +47,8 @@ function toTurns(records: ConversationRecord[]): { role: 'user' | 'assistant'; c
 
 /** 结果完整性自检发现缺字段时的最大重查次数。 */
 const MAX_REPAIR_ATTEMPTS = 1;
+/** SQL 生成/校验失败时（如 LLM 幻觉表名、返回空响应、markdown 包裹），带错误提示重试的最大次数。 */
+const MAX_SQL_REGEN_ATTEMPTS = 2;
 
 /**
  * 通用数据分析 Agent：问题 → 语义层生成 SQL → 查询 → 完整性自检(缺字段自动重查) → 分析 → (可选)LLM 摘要。
@@ -89,38 +91,56 @@ export class DataAnalysisAgent {
         plan.map((s) => `${s.action}: ${s.description}`).join(' → '),
       );
 
-      // 一次"生成 SQL → 执行"往返（重查时复用）
+      // 一次"生成 SQL → 执行"往返（重查时复用）；SQL 生成/校验失败时带错误提示重试
       const runQuery = async (targetQuestion: string, callLabel: string) => {
-        const sqlStart = Date.now();
-        const sqlResult = (await this.deps.tools.execute(
-          'wren_generate_sql',
-          targetQuestion,
-          context,
-        )) as { sql: string };
-        const { sql } = sqlResult;
-        toolCalls.push({
-          name: 'wren_generate_sql',
-          input: targetQuestion,
-          output: sql,
-          durationMs: Date.now() - sqlStart,
-          ok: true,
-        });
-        emit('tool_call', callLabel, sql);
+        let lastError: string | undefined;
+        for (let attempt = 0; attempt <= MAX_SQL_REGEN_ATTEMPTS; attempt += 1) {
+          const prompt =
+            attempt === 0 || !lastError
+              ? targetQuestion
+              : `${targetQuestion}\n\n注意：上次生成失败（${lastError}），请严格只使用已声明的表，重新生成只读 SQL，不要用 markdown 代码块包裹。`;
+          try {
+            const sqlStart = Date.now();
+            const sqlResult = (await this.deps.tools.execute(
+              'wren_generate_sql',
+              prompt,
+              context,
+            )) as { sql: string };
+            const { sql } = sqlResult;
+            toolCalls.push({
+              name: 'wren_generate_sql',
+              input: prompt,
+              output: sql,
+              durationMs: Date.now() - sqlStart,
+              ok: true,
+            });
+            emit('tool_call', attempt === 0 ? callLabel : `${callLabel}（重试）`, sql);
 
-        const queryStart = Date.now();
-        const result = (await this.deps.tools.execute('database_query', sql, context)) as {
-          rows: Record<string, unknown>[];
-          count: number | null;
-        };
-        toolCalls.push({
-          name: 'database_query',
-          input: sql,
-          output: { rows: result.rows.length, count: result.count },
-          durationMs: Date.now() - queryStart,
-          ok: true,
-        });
-        emit('tool_result', `查询执行完成，返回 ${result.rows.length} 行`);
-        return { sql, result };
+            const queryStart = Date.now();
+            const result = (await this.deps.tools.execute('database_query', sql, context)) as {
+              rows: Record<string, unknown>[];
+              count: number | null;
+            };
+            toolCalls.push({
+              name: 'database_query',
+              input: sql,
+              output: { rows: result.rows.length, count: result.count },
+              durationMs: Date.now() - queryStart,
+              ok: true,
+            });
+            emit('tool_result', `查询执行完成，返回 ${result.rows.length} 行`);
+            return { sql, result };
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : String(error);
+            // SQL 生成失败（空响应/markdown/dry-run 拒绝/表名幻觉）或执行失败
+            if (attempt < MAX_SQL_REGEN_ATTEMPTS) {
+              emit('observation', 'SQL 生成失败，重新生成', lastError);
+              continue;
+            }
+          }
+        }
+        // 重试用尽，抛出最后一个错误（由外层 catch 转为失败回答）
+        throw new Error(lastError ?? 'SQL 生成失败');
       };
 
       let { sql, result } = await runQuery(question, '通过语义层生成 SQL');

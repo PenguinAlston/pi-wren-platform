@@ -17,7 +17,7 @@ interface AgentConfigRow {
   label: string;
   description: string | null;
   system_prompt: string | null;
-  mdl: string;
+  project_json: string;
   db_connection_enc: string;
   status: string;
   last_error: string | null;
@@ -34,7 +34,7 @@ function rowToRecord(row: AgentConfigRow): AgentConfigRecord {
     label: row.label,
     description: row.description,
     systemPrompt: row.system_prompt,
-    mdl: row.mdl,
+    projectJson: row.project_json,
     dbConnectionEnc: row.db_connection_enc,
     status: row.status,
     lastError: row.last_error,
@@ -45,7 +45,7 @@ function rowToRecord(row: AgentConfigRow): AgentConfigRecord {
 }
 
 const SELECT_COLUMNS = `
-  id, agent_id, name, label, description, system_prompt, mdl,
+  id, agent_id, name, label, description, system_prompt, project_json,
   db_connection_enc, status, last_error, owner_id, created_at, updated_at
 `;
 
@@ -71,7 +71,7 @@ export class PostgresAgentConfigStore implements AgentConfigStore {
   async create(record: Omit<AgentConfigRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<AgentConfigRecord> {
     const result = await this.pool.query<AgentConfigRow>(
       `INSERT INTO sys_agent_config
-        (agent_id, name, label, description, system_prompt, mdl, db_connection_enc, status, last_error, owner_id)
+        (agent_id, name, label, description, system_prompt, project_json, db_connection_enc, status, last_error, owner_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING ${SELECT_COLUMNS}`,
       [
@@ -80,7 +80,7 @@ export class PostgresAgentConfigStore implements AgentConfigStore {
         record.label,
         record.description,
         record.systemPrompt,
-        record.mdl,
+        record.projectJson,
         record.dbConnectionEnc,
         record.status,
         record.lastError,
@@ -98,7 +98,7 @@ export class PostgresAgentConfigStore implements AgentConfigStore {
       label: 'label',
       description: 'description',
       systemPrompt: 'system_prompt',
-      mdl: 'mdl',
+      projectJson: 'project_json',
       dbConnectionEnc: 'db_connection_enc',
       status: 'status',
       lastError: 'last_error',

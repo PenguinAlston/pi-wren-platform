@@ -1,14 +1,17 @@
 import type { ModelProvider } from '@pi-wren/agent-sdk';
 import {
   DataAnalysisAgent,
-  LlmContextEngine,
+  WrenCliContextEngine,
   createDataAnalysisTools,
   type AgentDomainConfig,
   type MemoryStore,
 } from '@pi-wren/agent-runtime';
 import type { CustomAgentConfig, CustomAgentFactory } from '@pi-wren/agent-registry';
-import { ConfigDrivenContextEngine, parseSemanticConfig } from '@pi-wren/context-engine';
+import { WrenCli, allowedTablesOf, loadWrenProject } from '@pi-wren/context-engine';
 import { PostgresSqlExecutor } from '@pi-wren/data-engine';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { AgentSpec } from './deps';
 import type { AgentPoolManager } from './pool-manager';
 
@@ -21,25 +24,25 @@ export const DEFAULT_CUSTOM_SYSTEM_PROMPT =
   '数据中不包含的信息必须明确说明"数据中未包含"，不得臆测。';
 
 /**
- * 自定义 Agent 构建器：MDL 字符串 → SemanticConfig（校验）→ 独立连接池
- * → 规则引擎（兜底）+ LLM 动态 SQL（可选）→ DataAnalysisAgent。
- * SQL 校验表名白名单自动来自 MDL 声明的 models，注册即隔离。
+ * 自定义 Agent 构建器：WrenAI 工程 JSON → 落临时目录 → WrenCli → WrenCliContextEngine。
+ * SQL 校验表名白名单自动来自工程声明的 models（table_reference）。
  */
 export function createCustomAgentFactory(deps: {
-  model?: ModelProvider;
+  model: ModelProvider;
+  wrenBin?: string;
   memory: MemoryStore;
   poolManager: AgentPoolManager;
 }): CustomAgentFactory<AgentSpec> {
   return {
     async build(config: CustomAgentConfig): Promise<AgentSpec> {
-      const semantic = parseSemanticConfig(config.mdl, `agent:${config.agentId}`);
+      // 把 WrenAI 工程序列化 JSON 写到独立临时目录，作为 wren CLI 的工作目录
+      const projectDir = materializeProject(config.agentId, config.projectJson);
+      const cli = new WrenCli({ bin: deps.wrenBin, projectDir });
+      const project = loadWrenProject(projectDir);
+      const context = new WrenCliContextEngine({ model: deps.model, cli });
       // 独立连接池由 AgentPoolManager 统一管理（监控 + 更新/注销时释放）
       const sql = new PostgresSqlExecutor(deps.poolManager.create(config.agentId, config.db));
-      const configEngine = new ConfigDrivenContextEngine(semantic);
-      const context = deps.model
-        ? new LlmContextEngine({ model: deps.model, config: semantic, fallback: configEngine })
-        : configEngine;
-      const tools = createDataAnalysisTools(context, sql, semantic);
+      const tools = createDataAnalysisTools(context, sql, allowedTablesOf(project));
       const domain: AgentDomainConfig = {
         id: config.agentId,
         label: config.label,
@@ -64,4 +67,16 @@ export function createCustomAgentFactory(deps: {
       };
     },
   };
+}
+
+/**
+ * 把 WrenAI 工程序列化 JSON 写到临时目录。
+ * projectJson 是 `wren context init --from-mdl` 产出的 MDL JSON（含 models/relationships）。
+ */
+function materializeProject(agentId: string, projectJson: string): string {
+  const dir = join(tmpdir(), `pi-wren-agent-${agentId}`);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'mdl.json'), projectJson, 'utf8');
+  return dir;
 }

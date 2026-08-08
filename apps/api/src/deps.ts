@@ -5,7 +5,6 @@ import {
 } from '@pi-wren/agent-sdk';
 import {
   DataAnalysisAgent,
-  LlmContextEngine,
   WrenCliContextEngine,
   createDataAnalysisTools,
   insuranceDomain,
@@ -21,20 +20,18 @@ import {
   type OperationAuditLogger,
 } from '@pi-wren/agent-registry';
 import {
-  ConfigDrivenContextEngine,
-  WrenContextEngine,
   WrenCli,
-  loadSemanticConfig,
-  resolveSemanticFile,
+  allowedTablesOf,
+  isWrenProjectReady,
+  loadWrenProject,
   type ContextEngine,
-  type SemanticConfig,
 } from '@pi-wren/context-engine';
 import { InsuranceQueryService } from '@pi-wren/insurance-query';
 import { createDefaultSqlExecutor, createPool, type SqlExecutor } from '@pi-wren/data-engine';
 import { PiSessionStore } from '@pi-wren/pi-bridge';
 import type { MetricDefinition } from '@pi-wren/shared-types';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { ApiConfig } from './config';
 import { createCustomAgentFactory } from './custom-agent-factory';
 import { AgentPoolManager } from './pool-manager';
@@ -68,17 +65,13 @@ export interface ApiDeps {
 
 interface DomainRegistration {
   domain: AgentDomainConfig;
-  semanticFile: string;
 }
 
 // 平台当前仅保留保险综合查询 Agent（需求聚焦保险业务；财务等其他领域可按需重新注册）
-const DOMAINS: DomainRegistration[] = [
-  { domain: insuranceDomain, semanticFile: 'insurance.mdl.yml' },
-];
+const DOMAINS: DomainRegistration[] = [{ domain: insuranceDomain }];
 
 function buildModel(config: ApiConfig): ModelProvider | undefined {
   if (config.LLM_PROVIDER === 'mock') {
-    // mock 提供器仅用于离线演示，此时不注入 LLM，使用确定性的业务分析摘要作为回答
     return undefined;
   }
   return createModelProvider({
@@ -91,61 +84,55 @@ function buildModel(config: ApiConfig): ModelProvider | undefined {
 
 interface BuiltContext {
   context: ContextEngine;
-  /** 本地语义配置（供 database_query 做表名白名单校验）；Wren 路径无。 */
-  semanticConfig?: SemanticConfig;
+  /** 表名白名单（来自 WrenAI 工程的 table_reference），供 database_query 安全校验。 */
+  allowedTables: string[];
 }
 
-/** 解析 Wren CLI 项目目录：优先显式配置，其次仓库 semantic/wren。 */
+/** 解析 Wren CLI 项目目录：优先显式配置（相对 cwd 解析为绝对路径），其次仓库 semantic/wren。 */
 function resolveWrenProjectDir(config: ApiConfig): string | undefined {
-  if (config.WREN_PROJECT_DIR) return config.WREN_PROJECT_DIR;
-  for (const candidate of [
-    join(process.cwd(), 'semantic/wren'),
-    join(process.cwd(), '../../semantic/wren'),
-  ]) {
+  const cwd = process.cwd();
+  const candidates = config.WREN_PROJECT_DIR
+    ? [
+        resolve(cwd, config.WREN_PROJECT_DIR),
+        // 兼容从 apps/api 子目录启动的场景：向上找仓库根
+        resolve(cwd, '..', config.WREN_PROJECT_DIR),
+        resolve(cwd, '..', '..', config.WREN_PROJECT_DIR),
+      ]
+    : [
+        join(cwd, 'semantic/wren'),
+        join(cwd, '..', 'semantic/wren'),
+        join(cwd, '..', '..', 'semantic/wren'),
+      ];
+  for (const candidate of candidates) {
     if (existsSync(join(candidate, 'wren_project.yml'))) return candidate;
   }
   return undefined;
 }
 
-function buildContext(
-  config: ApiConfig,
-  semanticFile: string,
-  model?: ModelProvider,
-): BuiltContext {
-  if (config.WREN_URL) {
-    return { context: new WrenContextEngine({ endpoint: config.WREN_URL, token: config.WREN_TOKEN }) };
-  }
-  const path = config.SEMANTIC_DIR
-    ? join(config.SEMANTIC_DIR, semanticFile)
-    : resolveSemanticFile(semanticFile);
-  const semanticConfig = loadSemanticConfig(path);
-  const configEngine = new ConfigDrivenContextEngine(semanticConfig);
-  if (!model) {
-    return { context: configEngine, semanticConfig };
-  }
-  // 新版 Wren CLI（wrenai）受治理模式：显式配置 WREN_BIN 且项目就绪时启用
-  const wrenProjectDir = resolveWrenProjectDir(config);
-  if (config.WREN_BIN && wrenProjectDir) {
-    const cli = new WrenCli({ bin: config.WREN_BIN, projectDir: wrenProjectDir });
-    return {
-      context: new WrenCliContextEngine({ model, cli, config: semanticConfig, fallback: configEngine }),
-      semanticConfig,
-    };
-  }
-  // 配置了真实 LLM 时启用动态 SQL 生成，规则引擎作为降级兜底
-  return { context: new LlmContextEngine({ model, config: semanticConfig, fallback: configEngine }), semanticConfig };
+/**
+ * 构建 WrenAI CLI 语义引擎：完全拥抱 WrenAI 后的唯一语义层路径。
+ * 需要 LLM provider + WREN_BIN + 就绪的 WrenAI 工程，任一缺失即抛错（不再有确定性兜底）。
+ */
+function buildContext(config: ApiConfig, model: ModelProvider, projectDir: string): BuiltContext {
+  const cli = new WrenCli({ bin: config.WREN_BIN, projectDir });
+  const project = loadWrenProject(projectDir);
+  return {
+    context: new WrenCliContextEngine({ model, cli }),
+    allowedTables: allowedTablesOf(project),
+  };
 }
 
 async function buildBuiltinAgents(
   config: ApiConfig,
-  model: ModelProvider | undefined,
+  model: ModelProvider,
+  projectDir: string,
   memory: MemoryStore,
 ): Promise<AgentSpec[]> {
   const agents: AgentSpec[] = [];
-  for (const { domain, semanticFile } of DOMAINS) {
-    const { context, semanticConfig } = buildContext(config, semanticFile, model);
+  for (const { domain } of DOMAINS) {
+    const { context, allowedTables } = buildContext(config, model, projectDir);
     const sql: SqlExecutor = createDefaultSqlExecutor();
-    const tools = createDataAnalysisTools(context, sql, semanticConfig);
+    const tools = createDataAnalysisTools(context, sql, allowedTables);
     const agent = new DataAnalysisAgent({ domain, context, sql, tools, model, memory });
     agents.push({
       id: domain.id,
@@ -162,10 +149,22 @@ async function buildBuiltinAgents(
 /** Wire together the application dependencies from validated config. */
 export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiDeps> {
   const model = buildModel(config);
+  if (!model) {
+    throw new Error(
+      '完全拥抱 WrenAI 后必须配置真实 LLM provider（LLM_PROVIDER != mock），因为 SQL 生成依赖 LLM。',
+    );
+  }
+  const projectDir = resolveWrenProjectDir(config);
+  if (!projectDir || !config.WREN_BIN || !isWrenProjectReady(projectDir)) {
+    throw new Error(
+      '必须配置 WREN_BIN 且 WrenAI 工程就绪（wren_project.yml 存在）；请参考 README 部署 WrenAI CLI。',
+    );
+  }
+
   const memory = new PiSessionStore({
     ...(config.SESSION_DIR ? { sessionsRoot: config.SESSION_DIR } : {}),
   });
-  const agents = await buildBuiltinAgents(config, model, memory);
+  const agents = await buildBuiltinAgents(config, model, projectDir, memory);
   const query = new InsuranceQueryService(createDefaultSqlExecutor());
   const deps: ApiDeps = {
     config,
@@ -182,6 +181,7 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
     deps.poolManager = poolManager;
     const factory: CustomAgentFactory<AgentSpec> = createCustomAgentFactory({
       model,
+      wrenBin: config.WREN_BIN,
       memory,
       poolManager,
     });
@@ -204,9 +204,9 @@ export async function buildDeps(config: ApiConfig, logger: Logger): Promise<ApiD
 
   logger.info(
     {
-      provider: model?.name ?? 'none',
-      wren: Boolean(config.WREN_URL),
-      wrenCli: Boolean(config.WREN_BIN && resolveWrenProjectDir(config)),
+      provider: model.name,
+      wrenBin: config.WREN_BIN,
+      wrenProject: projectDir,
       domains: agents.map((a) => a.id),
       customAgents: agents.filter((a) => a.source === 'custom').length,
     },

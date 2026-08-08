@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WrenCli } from './cli';
 
+const isWindows = process.platform === 'win32';
+
 const FAKE_WREN = `#!/usr/bin/env node
 const args = process.argv.slice(2);
 if (args[0] === 'context' && args[1] === 'instructions') {
@@ -43,9 +45,17 @@ describe('WrenCli', () => {
   function setup(): WrenCli {
     dir = mkdtempSync(join(tmpdir(), 'wren-cli-test-'));
     writeFileSync(join(dir, 'wren_project.yml'), 'schema_version: 5\n');
-    const bin = join(dir, 'fake-wren.cjs');
-    writeFileSync(bin, FAKE_WREN);
-    chmodSync(bin, 0o755);
+    // Windows 不支持 shebang 直接执行 .cjs，改用 node 解释器 + .cmd 包装
+    const script = join(dir, 'fake-wren.cjs');
+    writeFileSync(script, FAKE_WREN);
+    let bin: string;
+    if (isWindows) {
+      bin = join(dir, 'fake-wren.cmd');
+      writeFileSync(bin, `@echo off\r\nnode "%~dp0fake-wren.cjs" %*\r\n`);
+    } else {
+      bin = script;
+      chmodSync(bin, 0o755);
+    }
     return new WrenCli({ bin, projectDir: dir });
   }
 

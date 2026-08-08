@@ -38,3 +38,14 @@ data/
 # Wren semantic project build artifacts
 semantic/wren/target/
 semantic/wren/.wren/
+
+# Python backend
+backend/logs/
+backend/data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+
+# Tooling
+.zcode/

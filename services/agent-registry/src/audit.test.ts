@@ -15,7 +15,7 @@ describe('OperationAuditLogger', () => {
     await logger.log({
       operType: 'agent_register',
       operContent: '注册自定义 Agent：my-erp',
-      sqlContent: 'mdl=1024 chars',
+      sqlContent: 'project=1024 chars',
       ipAddress: '127.0.0.1',
     });
     expect(pool.query).toHaveBeenCalledTimes(1);

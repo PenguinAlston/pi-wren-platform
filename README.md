@@ -4,9 +4,9 @@
 
 ## 核心能力
 
-- **自然语言查数**：中文提问 → LLM 动态生成 SQL（规则引擎兜底）→ 只读安全校验 → PostgreSQL 查询 → 防幻觉业务摘要
-- **多 Agent 开箱即用**：财务分析、保险综合查询（22 张生产级业务表 + 字典中文标签）
-- **自定义 Agent（自助注册）**：用户提供一份 MDL + 数据库连接串，即可注册专属查询 Agent，无需改代码/重启
+- **自然语言查数**：中文提问 → WrenAI 语义检索 + LLM 动态生成 SQL → `wren dry-run` 受治理校验 + 只读安全校验 → PostgreSQL 查询 → 防幻觉业务摘要
+- **多 Agent 开箱即用**：保险综合查询（22 张生产级业务表 + 字典中文标签）
+- **自定义 Agent（自助注册）**：用户提供一份 WrenAI 工程 JSON + 数据库连接串，即可注册专属查询 Agent，无需改代码/重启
 - **多轮会话**：基于开源 Pi jsonl 会话仓库持久化（重启不丢），续聊自动注入历史
 - **SSE 流式输出**：执行事件实时推送，前端实时渲染轨迹
 - **企业治理**：管理操作审计落库（sys_operation_log）、连接串 AES-256-GCM 加密、多租户 owner_id、连接池监控、SQL 表名白名单注册即隔离
@@ -28,7 +28,7 @@ pnpm dev
 
 打开 <http://localhost:3000/chat> 提问（如"为什么利润下降？"）；自定义 Agent 管理入口在 <http://localhost:3000/agents>（需 `.env` 中的 `ADMIN_TOKEN`）。
 
-默认使用 `mock` LLM（离线确定性分析）与 MDL 式语义层（`semantic/*.mdl.yml`），无需外部服务即可跑通全链路。
+语义层完全基于 WrenAI 原生工程（`semantic/wren/`），需配置真实 LLM provider 与 WrenAI CLI（见 `.env.example`）。
 
 ## 架构
 
@@ -43,10 +43,10 @@ Web (:3000) ──/api 代理──►  Express API (:8080)
  ├─ services/pi-bridge        开源 Pi 会话层：jsonl 多轮持久化 + 压缩决策 + SSE 协议
  ├─ services/agent-registry   自定义 Agent 注册表：sys_agent_config + AES 加密 + 审计
  │
-DataAnalysisAgent（领域配置驱动：内置 财务/保险 + 自定义）
+DataAnalysisAgent（领域配置驱动：内置 保险 + 自定义）
  │
- ├─ 语义层 ContextEngine：LlmContextEngine（LLM 动态 SQL）⇄ ConfigDrivenContextEngine（规则兜底）
- │    └─ 安全校验 sql-validation：统一关口 + 去注释/危险函数拦截 + 表名白名单（来自 MDL）
+ ├─ 语义层 WrenCliContextEngine：wren memory fetch（语义检索）+ LLM 生成 SQL + wren dry-run（受治理校验）
+ │    └─ 安全校验 sql-validation：统一关口 + 去注释/危险函数拦截 + 表名白名单（来自 WrenAI 工程 table_reference）
  ├─ Agent Tools：wren_generate_sql / database_query / result_analysis / wren_search_knowledge / llm_summarize
  │
  └─ 数据引擎 SqlExecutor → PostgreSQL（内置表 + 自定义 Agent 独立连接池）
@@ -60,12 +60,12 @@ DataAnalysisAgent（领域配置驱动：内置 财务/保险 + 自定义）
 |---|---|---|
 | `PORT` | `8080` | API 端口 |
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` | `localhost` / `5432` / `piwren` / `demo` / `demo` | PostgreSQL 连接 |
-| `LLM_PROVIDER` | `mock` | `mock` \| `openai` \| `anthropic` \| `ollama` |
+| `LLM_PROVIDER` | `openai` | `openai` \| `anthropic` \| `ollama`（必配真实 provider，不支持 mock） |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | - | OpenAI 兼容接口（含阿里云 DashScope 等） |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | - | Anthropic |
 | `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434` / `qwen2.5:7b` | 本地 Ollama |
-| `WREN_URL` / `WREN_TOKEN` | - | 配置后启用真实 Wren AI 服务 |
-| `SEMANTIC_DIR` | `semantic/` | 语义配置目录覆盖（可选） |
+| `WREN_BIN` | `wren` | WrenAI CLI 可执行（受治理语义层，必配） |
+| `WREN_PROJECT_DIR` | `semantic/wren` | WrenAI 工程目录（`wren_project.yml` 所在） |
 | `SESSION_DIR` | `data/sessions` | 会话 jsonl 持久化目录 |
 | `ADMIN_TOKEN` | - | 自定义 Agent 管理面鉴权（`X-Admin-Token`） |
 | `AGENT_SECRET_KEY` | - | 连接串加密密钥（≥8 字符，建议 ≥32 字节；**配置后才启用自定义 Agent**） |
@@ -88,16 +88,16 @@ apps/
   api/     Express API（配置校验、日志、健康检查、chat/SSE 路由、自定义 Agent 管理 API、连接池管理）
   web/     Next.js 聊天控制台（app/chat）+ 自定义 Agent 管理页（app/agents）
 services/
-  agent-runtime/    Agent 执行（计划、工具注册、事件、记忆、DataAnalysisAgent、LLM SQL 生成与校验）
-  context-engine/   Wren 语义层（Wren AI 客户端 + MDL 式配置驱动引擎）
+  agent-runtime/    Agent 执行（计划、工具注册、事件、记忆、DataAnalysisAgent、WrenCliContextEngine、SQL 校验）
+  context-engine/   WrenAI 语义层（WrenCli 子进程适配器 + WrenAI 工程加载器）
   data-engine/      PostgreSQL 数据引擎（连接池、SQL 执行、语句超时）
   pi-bridge/        开源 Pi 会话层（jsonl 多轮持久化、压缩决策、SSE 协议）
-  agent-registry/   自定义 Agent 注册表（sys_agent_config、AES 加密、审计、生命周期管理）
+  agent-registry/   自定义 Agent 注册表（sys_agent_config.project_json、AES 加密、审计、生命周期管理）
 packages/
   agent-sdk/        LLM Provider 抽象（OpenAI 兼容 / Anthropic / Ollama / Mock）
   shared-types/     跨服务共享类型
-semantic/           MDL 式语义配置（finance.mdl.yml / insurance.mdl.yml）
-examples/           mdl-template.yml（自定义 Agent 模板）
+semantic/wren/      WrenAI 原生语义工程（models + relationships + knowledge，单一语义源）
+examples/           wren-project-template.json（自定义 Agent 工程 JSON 模板）
 infra/postgres/     建表与种子数据（insurance_schema/insurance_seed/agent_config/z_admin_seed）
 docs/               架构、进展、路线图与设计文档
 ```
@@ -108,18 +108,18 @@ docs/               架构、进展、路线图与设计文档
 - `POST /api/agent/chat`、`POST /api/agent/:domain/chat` — 问答（支持 `sessionId` 续聊）
 - `POST /api/agent/:domain/chat/stream` — SSE 流式版（执行事件实时推送）
 - 自定义 Agent 管理面（`X-Admin-Token`；网页入口 `/agents`）：
-  - `POST /api/admin/agents` — 注册（MDL + 连接串，AES 加密落库，支持 `ownerId`）
+  - `POST /api/admin/agents` — 注册（WrenAI 工程 JSON + 连接串，AES 加密落库，支持 `ownerId`）
   - `GET /api/admin/agents`（`?ownerId=` 过滤）、`GET /api/admin/agents/:id` — 查询（连接脱敏）
   - `PUT /api/admin/agents/:id`（含启停）、`DELETE /api/admin/agents/:id` — 更新/注销
   - `POST /api/admin/agents/test`、`POST /api/admin/agents/:id/test` — 连接测试
-  - `POST /api/admin/agents/validate` — 仅校验 MDL
+  - `POST /api/admin/agents/validate-project` — 仅校验 WrenAI 工程 JSON
   - `GET /api/admin/agents/:id/status` — 运行状态 + 连接池监控
-  - 管理操作自动写 `sys_operation_log` 审计；模板见 `examples/mdl-template.yml`
+  - 管理操作自动写 `sys_operation_log` 审计；模板见 `examples/wren-project-template.json`
 - `GET /health` — 健康检查
 
 ## 测试
 
-92 个 Vitest 用例：LLM Provider、SQL 校验（含对抗性用例）、意图匹配、Agent 流水线、会话持久化、注册表/加密/审计、自定义 Agent 管理 API 集成（端口监听需本机授权）。
+Vitest 用例覆盖：LLM Provider、SQL 校验（含对抗性用例）、WrenAI 工程加载器、Agent 流水线、会话持久化、注册表/加密/审计、自定义 Agent 管理 API 集成（端口监听需本机授权）。
 
 ## 文档导航
 

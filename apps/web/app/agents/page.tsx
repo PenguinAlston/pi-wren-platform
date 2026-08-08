@@ -9,7 +9,7 @@ interface CustomAgentView {
   label: string;
   description: string | null;
   systemPrompt: string | null;
-  mdl?: string;
+  project?: string;
   connection: string;
   status: string;
   lastError: string | null;
@@ -38,7 +38,7 @@ const EMPTY_FORM = {
   label: '',
   description: '',
   systemPrompt: '',
-  mdl: '',
+  project: '',
   ownerId: '',
   host: 'localhost',
   port: '5432',
@@ -104,16 +104,16 @@ export default function AgentsPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function validateMdl() {
+  async function validateProject() {
     setMessage(null);
     try {
-      const data = (await api('/admin/agents/validate', {
+      const data = (await api('/admin/agents/validate-project', {
         method: 'POST',
-        body: JSON.stringify({ mdl: form.mdl }),
+        body: JSON.stringify({ project: form.project }),
       })) as { models: string[] };
-      setMessage({ kind: 'ok', text: `MDL 校验通过：模型表 ${data.models.join(', ')}` });
+      setMessage({ kind: 'ok', text: `WrenAI 工程校验通过：模型表 ${data.models.join(', ')}` });
     } catch (err) {
-      setMessage({ kind: 'err', text: err instanceof Error ? err.message : 'MDL 校验失败' });
+      setMessage({ kind: 'err', text: err instanceof Error ? err.message : 'WrenAI 工程校验失败' });
     }
   }
 
@@ -140,7 +140,7 @@ export default function AgentsPage() {
         label: form.label,
         description: form.description || undefined,
         systemPrompt: form.systemPrompt || undefined,
-        mdl: form.mdl,
+        project: form.project,
         ownerId: form.ownerId || undefined,
         db: dbFromForm(form),
       };
@@ -173,7 +173,7 @@ export default function AgentsPage() {
         label: a.label,
         description: a.description ?? '',
         systemPrompt: a.systemPrompt ?? '',
-        mdl: a.mdl ?? '',
+        project: a.project ?? '',
         ownerId: a.ownerId ?? '',
         host: '',
         port: '',
@@ -250,7 +250,7 @@ export default function AgentsPage() {
       <div className="card">
         <h2 className="section">接入与管理</h2>
         <p className="meta">
-          用户提供 MDL + 数据库连接串即可注册专属查询 Agent。管理接口需 X-Admin-Token（生产环境建议接入 SSO/登录，勿在前端存储长期密钥）。
+          用户提供 WrenAI 工程 JSON + 数据库连接串即可注册专属查询 Agent。管理接口需 X-Admin-Token（生产环境建议接入 SSO/登录，勿在前端存储长期密钥）。
         </p>
         <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
           <Input
@@ -307,14 +307,14 @@ export default function AgentsPage() {
         />
         <textarea
           className="textarea"
-          placeholder="MDL（YAML 语义配置：models/intents/metrics/knowledge）"
-          value={form.mdl}
-          onChange={(e) => setField('mdl', e.target.value)}
+          placeholder="WrenAI 工程 JSON（wren context init --from-mdl 产出的 MDL JSON，含 models/relationships）"
+          value={form.project}
+          onChange={(e) => setField('project', e.target.value)}
           style={{ marginTop: 10, minHeight: 220, fontFamily: 'monospace' }}
         />
         <div style={{ marginTop: 8 }}>
-          <Button onClick={() => void validateMdl()} disabled={!form.mdl}>
-            校验 MDL
+          <Button onClick={() => void validateProject()} disabled={!form.project}>
+            校验工程
           </Button>
         </div>
 
