@@ -270,8 +270,9 @@ class InsuranceQueryService:
 
     async def query_contract(self, cond: dict, page: int, page_size: int,
                              sort_by=None, sort_order=None) -> dict:
+        # 契约查询展示实际人名（不脱敏），便于业务人员核对
         return await self._run_list(build_contract_query(cond, page, page_size, sort_by, sort_order),
-                                    mask_contract_row, page, page_size)
+                                    lambda r: r, page, page_size)
 
     async def query_preserve(self, cond: dict, page: int, page_size: int,
                              sort_by=None, sort_order=None) -> dict:
@@ -382,7 +383,7 @@ class InsuranceQueryService:
         for r in rows:
             writer.writerow([
                 r["policy_no"], r["product_name"], r.get("policy_status_label"),
-                mask_name(r.get("applicant_name")), mask_name(r.get("insured_name")),
+                r.get("applicant_name"), r.get("insured_name"),
                 r["year_premium"], r["apply_date"], r["effect_date"], r["end_date"],
             ])
         return buf.getvalue()

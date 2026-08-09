@@ -90,7 +90,12 @@ async def chat_stream(domain: str, request: Request):
     logger.info("chat stream: domain={} session={}", domain, req.sessionId)
 
     async def event_generator():
+        import asyncio as _asyncio
+
+        queue: _asyncio.Queue = _asyncio.Queue()
+
         def on_event(event):
+            """Agent 每产生一个事件就放入队列，供 generator 实时 yield。"""
             payload = {
                 "id": event.id,
                 "type": event.type,
@@ -99,31 +104,27 @@ async def chat_stream(domain: str, request: Request):
             }
             if event.detail is not None:
                 payload["detail"] = event.detail
-            # SSE 格式：event: <type>\ndata: <ascii-json>\n\n（与 TS sse.ts 对齐）
-            yield {
-                "event": event.type,
-                "data": _ascii_json(payload),
-            }
+            queue.put_nowait({"event": event.type, "data": _ascii_json(payload)})
 
-        result = await spec.agent.answer(
-            req.message,
-            session_id=req.sessionId,
-            on_event=lambda e: None,  # 事件通过下方收集后推送
+        # 后台跑 Agent，事件通过 on_event 实时入队
+        task = _asyncio.create_task(
+            spec.agent.answer(req.message, session_id=req.sessionId, on_event=on_event)
         )
 
-        # 先推送执行事件
-        for event in result.events:
-            payload = {
-                "id": event.id,
-                "type": event.type,
-                "label": event.label,
-                "timestamp": event.timestamp,
-            }
-            if event.detail is not None:
-                payload["detail"] = event.detail
-            yield {"event": event.type, "data": _ascii_json(payload)}
+        # 实时推送队列中的事件（逐个 yield，前端看到流式效果）
+        while not task.done():
+            try:
+                item = await _asyncio.wait_for(queue.get(), timeout=0.5)
+                yield item
+            except _asyncio.TimeoutError:
+                continue
+
+        # Agent 完成：排空队列里剩余的事件
+        while not queue.empty():
+            yield queue.get_nowait()
 
         # 结束帧
+        result = await task
         yield {"event": "done", "data": _ascii_json(result.model_dump())}
 
     # sep="\n"：sse-starlette 默认 \r\n 行尾，前端 parseSseFrames 用 split('\n\n') 切帧，

@@ -230,7 +230,8 @@ class DataAnalysisAgent:
             {"role": "system", "content": SQL_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ]
-        resp = await self._llm.ainvoke(messages)
+        # SQL 生成用更大 max_tokens（复杂多表 JOIN 容易超 800 token 被截断）
+        resp = await self._llm.bind(max_tokens=2000).ainvoke(messages)
         return extract_sql(resp.content)
 
     async def _summarize(self, question: str, analysis, history: list) -> str:

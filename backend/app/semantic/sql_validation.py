@@ -36,11 +36,15 @@ def _normalize_for_inspection(sql: str) -> str:
 
 
 def extract_sql(raw: str) -> str:
-    """从 LLM 原始输出提取 SQL：剥离 markdown 代码块 + 去尾分号。"""
+    """从 LLM 原始输出提取 SQL：剥离 markdown 代码块（闭合或不闭合）+ 去尾分号。"""
     sql = raw.strip()
+    # 闭合的代码块：```sql ... ```
     fence = re.match(r"```(?:sql)?\s*([\s\S]*?)```", sql, re.IGNORECASE)
     if fence:
         sql = fence.group(1).strip()
+    elif sql.startswith("```"):
+        # 不闭合的代码块（LLM 输出被 max_tokens 截断）：剥离开头的 ```sql 标记
+        sql = re.sub(r"^```(?:sql)?\s*", "", sql).strip()
     return re.sub(r";\s*$", "", sql).strip()
 
 
