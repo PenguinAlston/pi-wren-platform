@@ -87,3 +87,23 @@ def test_comment_injected_table_not_flagged():
     parse_and_validate_sql("SELECT 1 -- FROM users\n", TABLES)
     with pytest.raises(ValueError, match="未声明表"):
         parse_and_validate_sql("SELECT * FROM users", TABLES)
+
+
+def test_accepts_multiple_ctes_separated_by_commas():
+    sql = (
+        "WITH policy_stats AS (SELECT p.product_type FROM ins_policy_main p), "
+        "claim_calc AS (SELECT c.policy_id FROM ins_claim_main c) "
+        "SELECT cs.product_type FROM claim_calc cs "
+        "JOIN policy_stats ps ON cs.policy_id = ps.policy_id"
+    )
+    result = parse_and_validate_sql(sql, TABLES)
+    assert "claim_calc" in result
+
+
+def test_accepts_cte_after_recursive_keyword():
+    sql = (
+        "WITH RECURSIVE org_tree AS (SELECT org_code FROM sys_org) "
+        "SELECT * FROM org_tree"
+    )
+    result = parse_and_validate_sql(sql, TABLES + ["sys_org"])
+    assert "org_tree" in result

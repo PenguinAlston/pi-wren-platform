@@ -77,9 +77,14 @@ def parse_and_validate_sql(
 
     clean = normalized.replace('"', "")
     allowed = {t.lower() for t in allowed_tables}
-    # CTE 名称放行
-    for m in re.finditer(r"\bwith\s+([a-z_][a-z0-9_]*)\s+as\b", clean, re.IGNORECASE):
-        allowed.add(m.group(1).lower())
+    # CTE 名称放行：WITH a AS (...) 及逗号分隔的后续 CTE（, b AS (...)）
+    # 只扩充放行名单（仅影响白名单集合），不会误拒任何查询。
+    for m in re.finditer(
+        r"\bwith\s+(?:recursive\s+)?([a-z_][a-z0-9_]*)\s+as\b|,\s*([a-z_][a-z0-9_]*)\s+as\b",
+        clean,
+        re.IGNORECASE,
+    ):
+        allowed.add((m.group(1) or m.group(2)).lower())
 
     refs: list[str] = []
     for pattern in [r"\bfrom\s+([a-z_][a-z0-9_.]*)", r"\bjoin\s+([a-z_][a-z0-9_.]*)"]:
