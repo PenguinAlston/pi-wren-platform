@@ -1,11 +1,11 @@
 services:
   postgres:
-    image: docker.1ms.run/bitnami/postgresql:latest
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:18.4-alpine
     environment:
-      # Bitnami PostgreSQL 环境变量（与应用默认值 demo/piwren 保持一致）
-      POSTGRESQL_USERNAME: demo
-      POSTGRESQL_PASSWORD: demo
-      POSTGRESQL_DATABASE: piwren
+      # 官方 postgres 镜像环境变量（与应用默认值 demo/piwren 保持一致）
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: piwren
     ports:
       - '5432:5432'
     volumes:
@@ -17,7 +17,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:7.4.4-alpine
+    image: docker.1ms.run/library/redis:8.4.0
     ports:
       - '6379:6379'
     healthcheck:
