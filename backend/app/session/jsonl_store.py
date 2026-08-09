@@ -44,7 +44,8 @@ class JsonlSessionStore:
         return self._locks[session_id]
 
     # --- 写 ---
-    async def save(self, session_id: str, question: str, answer: str, sql: str | None, data: list) -> None:
+    async def save(self, session_id: str, question: str, answer: str, sql: str | None, data: list,
+                   agent_id: str | None = None) -> None:
         if not _SESSION_ID_RE.match(session_id):
             raise ValueError(f"invalid sessionId: {session_id}")
         record = {
@@ -55,8 +56,10 @@ class JsonlSessionStore:
             "data": data,
             "createdAt": _now(),
         }
+        if agent_id:
+            record["agentId"] = agent_id
         async with self._lock(session_id):
-            path = self._find_session_file(session_id) or self._create_session_file(session_id)
+            path = self._find_session_file(session_id) or self._create_session_file(session_id, agent_id)
             with open(path, "a", encoding="utf-8") as f:
                 entry = {"type": "custom", "customType": _RECORD_ENTRY_TYPE, "data": record}
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -98,15 +101,22 @@ class JsonlSessionStore:
         records = await self.get_history(session_id)
         return records[-1] if records else None
 
-    async def list_sessions(self) -> list[dict]:
-        """会话列表（按最近更新倒序），name 优先重命名，否则首条提问截断。"""
+    async def list_sessions(self, agent_id: str | None = None) -> list[dict]:
+        """会话列表（按最近更新倒序），name 优先重命名，否则首条提问截断。
+
+        agent_id 非空时仅返回该 Agent 的会话；老会话文件无 agentId 字段，
+        读出来归为 None，传 agent_id 时被过滤掉（避免跨 Agent 串显）。
+        """
         summaries: list[dict] = []
         for path in sorted(self.root.rglob("*.jsonl")):
             records = self._read_records(path)
             if not records:
                 continue
-            title = self._read_title(path)
             first = records[0]
+            rec_agent_id = first.get("agentId")
+            if agent_id is not None and rec_agent_id != agent_id:
+                continue
+            title = self._read_title(path)
             last = records[-1]
             summaries.append({
                 "sessionId": first.get("sessionId", path.stem),
@@ -114,6 +124,7 @@ class JsonlSessionStore:
                 "createdAt": first.get("createdAt", ""),
                 "updatedAt": last.get("createdAt", ""),
                 "messageCount": len(records),
+                "agentId": rec_agent_id,
             })
         summaries.sort(key=lambda s: s["updatedAt"], reverse=True)
         return summaries
@@ -138,18 +149,20 @@ class JsonlSessionStore:
                 return path
         return None
 
-    def _create_session_file(self, session_id: str) -> Path:
+    def _create_session_file(self, session_id: str, agent_id: str | None = None) -> Path:
         cwd_dir = self.root / f"--{str(Path.cwd()).replace(':', '').replace('\\\\', '-').replace('/', '-')}--"
         cwd_dir.mkdir(parents=True, exist_ok=True)
         ts = _now().replace(":", "-").replace(".", "-")
         path = cwd_dir / f"{ts}_{session_id}.jsonl"
-        header = {
+        header: dict = {
             "type": "session",
             "version": 3,
             "id": session_id,
             "timestamp": _now(),
             "cwd": str(Path.cwd()),
         }
+        if agent_id:
+            header["agentId"] = agent_id
         with open(path, "w", encoding="utf-8") as f:
             f.write(json.dumps(header, ensure_ascii=False) + "\n")
         return path

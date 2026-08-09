@@ -194,9 +194,9 @@ class DataAnalysisAgent:
                 logger.warning("LLM 摘要失败，使用确定性分析: {}", e)
             emit("answer", "生成业务回答", answer_text)
 
-            # 保存会话
+            # 保存会话（带 domain，便于按 Agent 隔离会话列表）
             if self._memory:
-                await self._memory.save(sid, question, answer_text, sql, rows)
+                await self._memory.save(sid, question, answer_text, sql, rows, agent_id=self._domain.id)
 
             return AgentRunResult(
                 sessionId=sid, answer=answer_text, sql=sql, data=rows,

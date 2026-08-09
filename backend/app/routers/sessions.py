@@ -17,7 +17,9 @@ def _store(request: Request):
 
 @router.get("/api/sessions")
 async def list_sessions(request: Request):
-    sessions = await _store(request).list_sessions()
+    # ?agentId= 按 Agent 隔离会话列表；省略则返回全部（含无 agentId 的老会话）。
+    agent_id = request.query_params.get("agentId") or None
+    sessions = await _store(request).list_sessions(agent_id=agent_id)
     return JSONResponse(content={"sessions": sessions})
 
 

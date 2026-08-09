@@ -78,10 +78,15 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const loadSessions = useCallback(async (search?: string) => {
+  const loadSessions = useCallback(async (search?: string, agent?: string) => {
     const query = search ?? sessionsSearch;
+    const params = new URLSearchParams();
+    if (query) params.set('search', query);
+    // 按 Agent 隔离会话列表：只拉当前 domain 的会话
+    const agentId = agent ?? domain;
+    if (agentId) params.set('agentId', agentId);
     try {
-      const response = await fetch(`/api/sessions${query ? `?search=${encodeURIComponent(query)}` : ''}`);
+      const response = await fetch(`/api/sessions${params.toString() ? `?${params.toString()}` : ''}`);
       if (response.ok) {
         const body = (await response.json()) as { sessions: SessionSummary[] };
         setSessions(body.sessions ?? []);
@@ -89,7 +94,7 @@ export default function ChatPage() {
     } catch {
       // 服务未就绪时保持现状
     }
-  }, [sessionsSearch]);
+  }, [sessionsSearch, domain]);
 
   useEffect(() => {
     fetch('/api/agents')
@@ -215,6 +220,8 @@ export default function ChatPage() {
   const switchDomain = (next: string) => {
     setDomain(next);
     newSession();
+    // 切换 Agent 后加载该 Agent 的会话列表（按 agentId 隔离）
+    void loadSessions(undefined, next);
   };
 
   const openSession = useCallback(async (sessionId: string) => {
