@@ -62,14 +62,26 @@ COMMENT ON TABLE sys_operation_log IS '系统操作日志：传统查询/AI问�
 
 CREATE TABLE ai_chat_session (
     session_id    varchar(64) PRIMARY KEY,
-    user_id       varchar(64) NOT NULL REFERENCES sys_user(user_id),
-    session_name  varchar(128),
-    chat_content  text NOT NULL,
+    user_id       varchar(64),                    -- 可空，预留登录（当前无登录系统）
+    session_name  varchar(128),                   -- 会话名（重命名用）
+    agent_id      varchar(64) NOT NULL,           -- 归属 Agent（会话按 Agent 隔离）
     create_time   timestamp DEFAULT CURRENT_TIMESTAMP,
     update_time   timestamp DEFAULT CURRENT_TIMESTAMP,
     is_delete     char(1) DEFAULT '0'
 );
-COMMENT ON TABLE ai_chat_session IS 'AI会话记录：多轮对话上下文与权限隔离';
+COMMENT ON TABLE ai_chat_session IS 'AI会话记录：会话主表（多轮对话按 Agent 隔离）';
+
+CREATE TABLE ai_chat_message (
+    id            bigserial PRIMARY KEY,
+    session_id    varchar(64) NOT NULL REFERENCES ai_chat_session(session_id) ON DELETE CASCADE,
+    question      text,
+    answer        text,
+    sql_text      text,                           -- 生成的 SQL（列名避开关键字 sql）
+    data_json     text,                           -- 查询结果 JSON 字符串
+    create_time   timestamp DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_ai_chat_message_session ON ai_chat_message(session_id);
+COMMENT ON TABLE ai_chat_message IS 'AI会话明细：每轮对话一条记录（question/answer/sql/结果）';
 
 -- ---------------------------------------------------------------------
 -- 5.2 产品费率业务域

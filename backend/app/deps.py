@@ -126,11 +126,22 @@ async def build_state(settings: Settings) -> AppState:
 
     llm = build_llm(settings)
 
-    # 会话存储（jsonl）
-    from app.session.jsonl_store import JsonlSessionStore
+    # 传统查询连接池（只读）
+    from app.data.db import create_default_pool, create_writable_pool
 
-    memory = JsonlSessionStore(settings.sessions_root)
-    logger.info("会话存储: {}", memory.root)
+    pool = await create_default_pool(settings)
+    # 传统保险查询服务
+    from app.insurance.service import InsuranceQueryService
+
+    insurance = InsuranceQueryService(pool)
+    # 可写连接池（会话存储/自定义 Agent 注册表/审计写入用）
+    writable_pool = await create_writable_pool(settings)
+
+    # 会话存储（PostgreSQL；DbSessionStore 与 JsonlSessionStore 方法签名一致）
+    from app.session.db_store import DbSessionStore
+
+    memory = DbSessionStore(writable_pool)
+    logger.info("会话存储: PostgreSQL (ai_chat_session + ai_chat_message)")
 
     # 内置 Agent（当前仅保险）
     agents: dict[str, AgentSpec] = {}
@@ -142,17 +153,6 @@ async def build_state(settings: Settings) -> AppState:
         )
         agents[domain.id] = spec
         logger.info("已注册内置 Agent: {} ({})", domain.id, domain.label)
-
-    # 传统查询连接池（只读）
-    from app.data.db import create_default_pool, create_writable_pool
-
-    pool = await create_default_pool(settings)
-    # 传统保险查询服务
-    from app.insurance.service import InsuranceQueryService
-
-    insurance = InsuranceQueryService(pool)
-    # 可写连接池（自定义 Agent 注册表/审计写入用）
-    writable_pool = await create_writable_pool(settings)
 
     # 审计（写入 sys_operation_log，失败不阻断）
     from app.registry.audit import OperationAuditLogger
