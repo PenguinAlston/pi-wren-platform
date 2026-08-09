@@ -944,6 +944,117 @@ textarea,
   margin: 0 0 8px;
 }
 
+/* ===== Markdown 渲染（AI 回答富文本）===== */
+.markdown-body {
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 14px 0 8px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.markdown-body h1 { font-size: 18px; }
+.markdown-body h2 { font-size: 16px; }
+.markdown-body h3 { font-size: 15px; }
+.markdown-body h4 { font-size: 14px; }
+
+.markdown-body p {
+  margin: 6px 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+
+.markdown-body li {
+  margin: 3px 0;
+}
+
+.markdown-body strong {
+  font-weight: 700;
+}
+
+.markdown-body em {
+  font-style: italic;
+}
+
+.markdown-body blockquote {
+  margin: 8px 0;
+  padding: 4px 12px;
+  border-left: 3px solid var(--animal-border-color, #c4b89e);
+  color: var(--text-secondary, #9f927d);
+}
+
+.markdown-body code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--code-bg, #f0e8d8);
+  font-family: 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+}
+
+.markdown-body pre {
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--code-bg, #f0e8d8);
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 13px;
+}
+
+.markdown-body table {
+  width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 6px 10px;
+  border: 1px solid var(--animal-border-color, #c4b89e);
+  text-align: left;
+}
+
+.markdown-body th {
+  background: var(--code-bg, #f0e8d8);
+  font-weight: 700;
+}
+
+.markdown-body tr:nth-child(even) {
+  background: rgba(159, 146, 125, 0.06);
+}
+
+.markdown-body a {
+  color: var(--animal-primary-color, #19c8b9);
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+.markdown-body hr {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid var(--animal-border-color, #c4b89e);
+  opacity: 0.5;
+}
+
 .chat-typing {
   display: inline-flex;
   gap: 5px;
@@ -993,6 +1104,168 @@ textarea,
   display: flex;
   justify-content: flex-end;
   gap: var(--animal-spacing-sm);
+}
+
+/* ===== Thinking 流式展示（类似 chat.qwen.ai 思考过程）===== */
+.thinking-stream {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: var(--code-bg, #f7f3df);
+  border-radius: 14px;
+  border-left: 3px solid var(--animal-primary-color, #19c8b9);
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary, #9f927d);
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.thinking-header:hover {
+  color: var(--animal-primary-color, #19c8b9);
+}
+
+.thinking-chevron {
+  margin-left: auto;
+  font-size: 12px;
+  transition: transform 0.25s ease;
+  opacity: 0.6;
+}
+
+.thinking-chevron.open {
+  transform: rotate(180deg);
+}
+
+.thinking-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--animal-primary-color, #19c8b9);
+}
+
+.thinking-dot.active {
+  animation: thinking-pulse 1s ease-in-out infinite;
+}
+
+.thinking-dot.done {
+  background: var(--animal-success-color, #6fba2c);
+}
+
+.thinking-title {
+  font-size: 13px;
+}
+
+.thinking-steps {
+  margin: 0;
+  padding-left: 16px;
+  list-style: none;
+}
+
+.thinking-step {
+  position: relative;
+  margin-bottom: 6px;
+  padding-left: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary, #9f927d);
+  animation: thinking-fade-in 0.3s ease;
+}
+
+/* 左侧竖线连接（思考树效果）*/
+.thinking-step::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 0;
+  bottom: -6px;
+  width: 2px;
+  background: var(--animal-border-color, #c4b89e);
+  opacity: 0.4;
+}
+
+.thinking-step:last-child::before {
+  display: none;
+}
+
+.thinking-label {
+  margin-left: 6px;
+  font-weight: 500;
+}
+
+.thinking-detail {
+  margin: 4px 0 0 0;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+  color: var(--text-color, #794f27);
+}
+
+.thinking-active .thinking-pulse {
+  font-style: italic;
+  opacity: 0.7;
+  animation: thinking-pulse 1s ease-in-out infinite;
+}
+
+/* 事件类型标签 */
+.think-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.think-badge.plan {
+  background: #e6f9f6;
+  color: var(--animal-primary-color-active, #11a89b);
+}
+
+.think-badge.tool {
+  background: #fef3e2;
+  color: #c98a2b;
+}
+
+.think-badge.obs {
+  background: #f0e8f8;
+  color: #8b5cf6;
+}
+
+.think-badge.ok {
+  background: #ecf8e0;
+  color: var(--animal-success-color-active, #5a9e1e);
+}
+
+.think-badge.err {
+  background: #fce8e8;
+  color: var(--animal-error-color, #e05a5a);
+}
+
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes thinking-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .ai-table-toolbar {

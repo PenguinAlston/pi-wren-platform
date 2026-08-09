@@ -6,7 +6,8 @@ import type { AgentEvent, AgentRunResult } from '@pi-wren/shared-types';
 import ChatChart from './components/ChatChart';
 import ChatResultTable from './components/ChatResultTable';
 import SessionSidebar, { type SessionSummary } from './components/SessionSidebar';
-import { TracePanel } from './components/TracePanel';
+import { ThinkingStream } from './components/ThinkingStream';
+import { Markdown } from './components/Markdown';
 
 interface AgentInfo {
   id: string;
@@ -357,15 +358,24 @@ export default function ChatPage() {
             ) : (
               <div key={message.id} className="chat-row assistant">
                 <div className={`chat-bubble assistant${message.error ? ' error' : ''}`}>
-                  {message.loading ? (
+                  {/* thinking 流：loading 时实时展示已收到的事件（类似 chat.qwen.ai） */}
+                  {message.events && message.events.length > 0 ? (
+                    <ThinkingStream events={message.events} loading={message.loading ?? false} />
+                  ) : null}
+
+                  {/* loading 且还没收到事件时，显示跳动点 */}
+                  {message.loading && (!message.events || message.events.length === 0) ? (
                     <span className="chat-typing">
                       <i />
                       <i />
                       <i />
                     </span>
-                  ) : (
+                  ) : null}
+
+                  {/* 非 loading 时显示回答内容 */}
+                  {!message.loading ? (
                     <>
-                      {message.content ? <p className="chat-answer">{message.content}</p> : null}
+                      {message.content ? <Markdown content={message.content} /> : null}
                       {message.error ? (
                         <Button type="link" size="small" onClick={() => void retryLast()}>
                           重试
@@ -385,14 +395,6 @@ export default function ChatPage() {
                           />
                         </div>
                       ) : null}
-                      {message.events && message.events.length > 0 ? (
-                        <div className="chat-details">
-                          <Collapse
-                            question={`执行轨迹（${message.events.length}）`}
-                            answer={<TracePanel events={message.events} />}
-                          />
-                        </div>
-                      ) : null}
                       <div className="chat-bubble-actions">
                         <Button
                           type="link"
@@ -403,7 +405,7 @@ export default function ChatPage() {
                         </Button>
                       </div>
                     </>
-                  )}
+                  ) : null}
                 </div>
               </div>
             ),
