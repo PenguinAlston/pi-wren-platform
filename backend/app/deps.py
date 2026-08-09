@@ -95,6 +95,14 @@ class AppState:
         return self.agents.get(domain)
 
 
+def _disable_thinking(model: str) -> dict:
+    """qwen3 系列默认思考会把回答放进 reasoning_content 导致 content 为空；
+    DashScope OpenAI 兼容接口用顶层 enable_thinking=false 禁用思考。"""
+    if "qwen" in (model or "").lower():
+        return {"extra_body": {"enable_thinking": False}}
+    return {}
+
+
 def build_llm(settings: Settings) -> ChatOpenAI:
     """从配置构建 LLM（支持 OpenAI 兼容 / DashScope GLM）。"""
     return ChatOpenAI(
@@ -104,6 +112,7 @@ def build_llm(settings: Settings) -> ChatOpenAI:
         temperature=0,
         max_tokens=800,
         timeout=100,
+        **_disable_thinking(settings.OPENAI_MODEL or ""),
     )
 
 
@@ -193,6 +202,7 @@ async def build_state(settings: Settings) -> AppState:
                 api_key=settings.OPENAI_API_KEY,
                 base_url=settings.OPENAI_BASE_URL,
                 temperature=0, max_tokens=800, timeout=100,
+                **_disable_thinking(settings.OPENAI_MODEL or ""),
             )
             tables = [t for m in proj.get("models", []) for t in [((m.get("tableReference") or {}).get("table") or "").lower()] if t]
             tables.append("sys_dict")
