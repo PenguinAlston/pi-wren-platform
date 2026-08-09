@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.registry.crypto import decrypt_secret
+from app.semantic.db_introspect import generate_mdl_from_db
 
 router = APIRouter()
 
@@ -205,3 +206,86 @@ async def validate_project(request: Request):
         return JSONResponse(content={"ok": True, "models": names})
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": f"WrenAI 工程校验失败：{e}"})
+
+
+async def _probe_connection(db: dict) -> dict:
+    """执行 SELECT 1 连通性测试，建临时只读连接池，结束即关。"""
+    from app.data.db import create_pool
+    pool = await create_pool(
+        host=db.get("host", "localhost"),
+        port=int(db.get("port", 5432)),
+        database=db["database"],
+        user=db["user"],
+        password=db["password"],
+        max_size=1,
+    )
+    try:
+        async with pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": f"connection failed: {e}"}
+    finally:
+        await pool.close()
+
+
+@router.post("/api/admin/agents/test")
+async def test_db_connection(request: Request):
+    """测试任意连接配置：POST /api/admin/agents/test。"""
+    if not _require_admin(request):
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    body = await request.json()
+    db_body = body.get("db") if isinstance(body.get("db"), dict) else body
+    if not db_body.get("database") or not db_body.get("user") or not db_body.get("password"):
+        return JSONResponse(status_code=400, content={"error": "invalid connection config"})
+    result = await _probe_connection(_db_schema(db_body))
+    return JSONResponse(status_code=200 if result["ok"] else 400, content=result)
+
+
+@router.post("/api/admin/agents/{agent_id}/test")
+async def test_agent_connection(agent_id: str, request: Request):
+    """测试已注册 Agent 的连接：POST /api/admin/agents/{agent_id}/test。"""
+    if not _require_admin(request):
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    state = request.app.state.app_state
+    record = await state.agent_store.find_by_agent_id(agent_id)
+    if not record:
+        return JSONResponse(status_code=404, content={"error": f"agent not found: {agent_id}"})
+    db = json.loads(decrypt_secret(record["dbConnectionEnc"], state.settings.AGENT_SECRET_KEY))
+    result = await _probe_connection(db)
+    return JSONResponse(status_code=200 if result["ok"] else 400, content=result)
+
+
+@router.post("/api/admin/agents/import-from-db")
+async def import_from_db(request: Request):
+    """从数据库内省生成 WrenAI MDL JSON（不落库、不建实例）。
+
+    与 validate-project 一样是"纯生成"——注册仍走 POST /api/admin/agents。
+    用临时只读连接池执行内省，结束即关。
+    """
+    if not _require_admin(request):
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    state = request.app.state.app_state
+    body = await request.json()
+    db_body = body.get("db") if isinstance(body.get("db"), dict) else body
+    db = _db_schema(db_body)
+    if not db.get("database") or not db.get("user") or not db.get("password"):
+        return JSONResponse(status_code=400, content={"error": "invalid request",
+                                                      "details": "db.database/user/password 必填"})
+    schema = (body.get("schema") or "public").strip() or "public"
+    descriptions = body.get("descriptions")
+    try:
+        manifest = await generate_mdl_from_db(db, schema=schema, descriptions_text=descriptions)
+        if not manifest["models"]:
+            return JSONResponse(status_code=400, content={"error": f'schema "{schema}" 下未发现任何基础表'})
+        if state.audit:
+            await state.audit.log("agent_import",
+                                  f"从数据库内省生成工程 JSON（schema={schema}, {len(manifest['models'])} 表）",
+                                  sql_content=f'{db["host"]}:{db["port"]}/{db["database"]}',
+                                  ip_address=request.client.host if request.client else None)
+        return JSONResponse(content={
+            "project": json.dumps(manifest, ensure_ascii=False, indent=2),
+            "tables": [m["name"] for m in manifest["models"]],
+        })
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": f"数据库内省失败：{e}"})
