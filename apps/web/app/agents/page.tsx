@@ -45,6 +45,8 @@ const EMPTY_FORM = {
   database: '',
   user: '',
   password: '',
+  dbSchema: 'public',
+  descriptions: '',
 };
 
 type FormState = typeof EMPTY_FORM;
@@ -117,6 +119,30 @@ export default function AgentsPage() {
     }
   }
 
+  async function importFromDb() {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const data = (await api('/admin/agents/import-from-db', {
+        method: 'POST',
+        body: JSON.stringify({
+          db: dbFromForm(form),
+          schema: form.dbSchema || 'public',
+          ...(form.descriptions ? { descriptions: form.descriptions } : {}),
+        }),
+      })) as { project: string; tables: string[] };
+      setField('project', data.project);
+      setMessage({
+        kind: 'ok',
+        text: `已从数据库生成工程 JSON（${data.tables.length} 张表：${data.tables.slice(0, 8).join(', ')}${data.tables.length > 8 ? ' …' : ''}）。请校验后注册。`,
+      });
+    } catch (err) {
+      setMessage({ kind: 'err', text: err instanceof Error ? err.message : '从数据库导入失败' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function testConnection() {
     setMessage(null);
     try {
@@ -180,6 +206,8 @@ export default function AgentsPage() {
         database: '',
         user: '',
         password: '',
+        dbSchema: 'public',
+        descriptions: '',
       });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -269,9 +297,7 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      {message ? (
-        <div className={message.kind === 'ok' ? 'card' : 'error-banner'}>{message.text}</div>
-      ) : null}
+      {message?.kind === 'err' ? <div className="error-banner">{message.text}</div> : null}
 
       <div className="card">
         <h2 className="section">{editing ? `编辑 Agent：${editing}` : '注册新 Agent'}</h2>
@@ -312,11 +338,25 @@ export default function AgentsPage() {
           onChange={(e) => setField('project', e.target.value)}
           style={{ marginTop: 10, minHeight: 220, fontFamily: 'monospace' }}
         />
-        <div style={{ marginTop: 8 }}>
-          <Button onClick={() => void validateProject()} disabled={!form.project}>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <Button onClick={() => void importFromDb()} disabled={loading || !form.database}>
+            {loading ? '生成中…' : '从数据库导入'}
+          </Button>
+          <Button onClick={() => void validateProject()} disabled={loading || !form.project}>
             校验工程
           </Button>
+          <span className="meta">
+            「从数据库导入」会根据下方数据库连接内省表结构，自动生成工程 JSON 回填至此（可选补充中文描述）。
+          </span>
         </div>
+
+        <textarea
+          className="textarea"
+          placeholder="中文描述补充（YAML/JSON，可选）。格式：{ models: { 表名: { description: 表说明, columns: { 列名: 列说明 } } } }"
+          value={form.descriptions}
+          onChange={(e) => setField('descriptions', e.target.value)}
+          style={{ marginTop: 10, minHeight: 80, fontFamily: 'monospace' }}
+        />
 
         <h3 className="section" style={{ marginTop: 14 }}>
           数据库连接
@@ -327,6 +367,7 @@ export default function AgentsPage() {
           <Input placeholder="database" value={form.database} onChange={(e) => setField('database', e.target.value)} />
           <Input placeholder="user" value={form.user} onChange={(e) => setField('user', e.target.value)} />
           <Input type="password" placeholder="password" value={form.password} onChange={(e) => setField('password', e.target.value)} />
+          <Input placeholder="schema（默认 public）" value={form.dbSchema} onChange={(e) => setField('dbSchema', e.target.value)} />
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center' }}>
@@ -425,6 +466,16 @@ export default function AgentsPage() {
         onOk={() => confirmDelete && void doDelete(confirmDelete)}
       >
         确认注销 Agent「{confirmDelete}」？此操作不可恢复。
+      </Modal>
+
+      <Modal
+        open={message?.kind === 'ok'}
+        title="操作结果"
+        maskClosable
+        onClose={() => setMessage(null)}
+        onOk={() => setMessage(null)}
+      >
+        {message?.text}
       </Modal>
     </main>
   );
