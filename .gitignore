@@ -49,3 +49,7 @@ __pycache__/
 
 # Tooling
 .zcode/
+
+# backend/app/data 是 Python 数据层源码（非运行时数据），放行
+!backend/app/data/
+!backend/app/data/**
