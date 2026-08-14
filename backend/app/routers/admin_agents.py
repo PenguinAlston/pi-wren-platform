@@ -10,24 +10,13 @@ import re
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
+from app.auth.admin import require_admin
 from app.registry.crypto import decrypt_secret
 from app.semantic.db_introspect import generate_mdl_from_db
 
 router = APIRouter()
 
 _AGENT_ID_RE = re.compile(r"^[a-z0-9-]{1,64}$")
-
-
-def _require_admin(request: Request) -> bool:
-    """X-Admin-Token 与环境 ADMIN_TOKEN 比对。"""
-    token = request.app.state.app_state.settings.ADMIN_TOKEN
-    if not token:
-        return False
-    return request.headers.get("x-admin-token") == token
-
-
-def _admin_error(resp: JSONResponse) -> JSONResponse:
-    return resp
 
 
 def _db_schema(body: dict) -> dict:
@@ -69,8 +58,7 @@ def _to_public_view(record: dict, include_project: bool = False) -> dict:
 
 @router.get("/api/admin/agents")
 async def list_admin_agents(request: Request):
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     owner_id = request.query_params.get("ownerId")
     records = await state.agent_store.list()
@@ -82,8 +70,7 @@ async def list_admin_agents(request: Request):
 
 @router.get("/api/admin/agents/{agent_id}")
 async def get_admin_agent(agent_id: str, request: Request):
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     record = await state.agent_store.find_by_agent_id(agent_id)
     if not record:
@@ -94,8 +81,7 @@ async def get_admin_agent(agent_id: str, request: Request):
 
 @router.post("/api/admin/agents")
 async def create_admin_agent(request: Request):
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     body = await request.json()
 
@@ -134,8 +120,7 @@ async def create_admin_agent(request: Request):
 
 @router.put("/api/admin/agents/{agent_id}")
 async def update_admin_agent(agent_id: str, request: Request):
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     body = await request.json()
     record = await state.agent_store.find_by_agent_id(agent_id)
@@ -165,8 +150,7 @@ async def update_admin_agent(agent_id: str, request: Request):
 
 @router.delete("/api/admin/agents/{agent_id}")
 async def delete_admin_agent(agent_id: str, request: Request):
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     ok = await state.agent_registry.delete(agent_id)
     if not ok:
@@ -178,8 +162,7 @@ async def delete_admin_agent(agent_id: str, request: Request):
 
 @router.get("/api/admin/agents/{agent_id}/status")
 async def agent_status(agent_id: str, request: Request):
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     record = await state.agent_store.find_by_agent_id(agent_id)
     if not record:
@@ -193,8 +176,7 @@ async def agent_status(agent_id: str, request: Request):
 
 @router.post("/api/admin/agents/validate-project")
 async def validate_project(request: Request):
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     body = await request.json()
     project = (body.get("project") or "").strip()
     try:
@@ -232,8 +214,7 @@ async def _probe_connection(db: dict) -> dict:
 @router.post("/api/admin/agents/test")
 async def test_db_connection(request: Request):
     """测试任意连接配置：POST /api/admin/agents/test。"""
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     body = await request.json()
     db_body = body.get("db") if isinstance(body.get("db"), dict) else body
     if not db_body.get("database") or not db_body.get("user") or not db_body.get("password"):
@@ -245,8 +226,7 @@ async def test_db_connection(request: Request):
 @router.post("/api/admin/agents/{agent_id}/test")
 async def test_agent_connection(agent_id: str, request: Request):
     """测试已注册 Agent 的连接：POST /api/admin/agents/{agent_id}/test。"""
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     record = await state.agent_store.find_by_agent_id(agent_id)
     if not record:
@@ -263,8 +243,7 @@ async def import_from_db(request: Request):
     与 validate-project 一样是"纯生成"——注册仍走 POST /api/admin/agents。
     用临时只读连接池执行内省，结束即关。
     """
-    if not _require_admin(request):
-        return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    require_admin(request)
     state = request.app.state.app_state
     body = await request.json()
     db_body = body.get("db") if isinstance(body.get("db"), dict) else body

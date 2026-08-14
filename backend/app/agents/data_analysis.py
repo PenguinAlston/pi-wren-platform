@@ -61,6 +61,7 @@ class DataAnalysisAgent:
         *,
         session_id: str | None = None,
         on_event=None,
+        user_id: str | None = None,
     ) -> AgentRunResult:
         started = time.time()
         sid = session_id or str(uuid.uuid4())
@@ -166,6 +167,11 @@ class DataAnalysisAgent:
 
             # 启发式分析
             analysis = analyze_query_result(rows, question)
+            row_limit = getattr(self._engine, "row_limit", None)
+            if row_limit and len(rows) >= row_limit:
+                note = f"查询结果已达行数上限 {row_limit} 行，数据可能不完整。"
+                analysis.observations.append(note)
+                analysis.summary = f"{analysis.summary} {note}"
             if missing:
                 labels = "、".join(m.label for m in missing)
                 note = f"本次查询结果仍缺少用户要求的字段：{labels}。"
@@ -194,9 +200,10 @@ class DataAnalysisAgent:
                 logger.warning("LLM 摘要失败，使用确定性分析: {}", e)
             emit("answer", "生成业务回答", answer_text)
 
-            # 保存会话（带 domain，便于按 Agent 隔离会话列表）
+            # 保存会话（带 domain，便于按 Agent 隔离会话列表；user_id 用于多用户归属）
             if self._memory:
-                await self._memory.save(sid, question, answer_text, sql, rows, agent_id=self._domain.id)
+                await self._memory.save(sid, question, answer_text, sql, rows,
+                                        agent_id=self._domain.id, user_id=user_id)
 
             return AgentRunResult(
                 sessionId=sid, answer=answer_text, sql=sql, data=rows,

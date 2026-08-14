@@ -31,6 +31,11 @@ class AgentRegistry:
         self._on_dispose = on_dispose
         self._instances: dict[str, Any] = {}
 
+    @property
+    def instances(self) -> dict[str, Any]:
+        """agent_id → 已构建实例（只读视图，装配方读取用）。"""
+        return dict(self._instances)
+
     # --- 生命周期 ---
     async def load_all(self) -> dict:
         """启动时加载全部 enabled 配置；单个失败仅记录，不影响其他。"""

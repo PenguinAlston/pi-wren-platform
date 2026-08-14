@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -33,8 +34,9 @@ def rows_json_ready(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 class WrenEngineService:
     """封装 WrenEngine + WrenMemory，提供语义检索 + SQL 校验 + 受治理执行。
 
-    初始化时加载 MDL（target/mdl.json），构建 WrenEngine 和 WrenMemory 实例。
-    线程安全：WrenEngine/WrenMemory 内部有连接/状态，建议单例。
+    初始化时加载 MDL（target/mdl.json），构建 WrenEngine 引擎池和 WrenMemory 实例。
+    每个 WrenEngine 持有一条独立的 psycopg 连接（懒创建），调用经轮询分发，
+    避免高并发下所有 AI 查询在单连接上串行排队。WrenMemory 只读，单实例共享。
     """
 
     def __init__(self, settings: Settings):
@@ -59,15 +61,42 @@ class WrenEngineService:
             "user": settings.DB_USER,
             "password": settings.DB_PASSWORD,
             "database": settings.DB_NAME,
+            # libpq options：覆盖 wren 连接器默认的 180s，约束单条 AI 查询时长
+            "kwargs": {
+                "options": f"-c statement_timeout={settings.AI_QUERY_TIMEOUT_SECONDS}s",
+            },
         }
+        self._row_limit = settings.AI_QUERY_ROW_LIMIT
+        self._pool_size = max(1, settings.AI_ENGINE_POOL_SIZE)
 
         # 延迟导入（wrenai 重，避免 import 时副作用）
+        from wren.config import WrenConfig
         from wren.engine import WrenEngine
         from wren.memory import WrenMemory
 
-        self._engine = WrenEngine(self._manifest_str, "postgres", self._connection_info)
+        self._engine_cls = WrenEngine
+        # strict mode：fail-closed 治理（表白名单 + 数据外读函数拦截），翻译层兜底之上的显式闸
+        extra_denied = frozenset(
+            f.strip().lower() for f in (settings.WREN_DENIED_FUNCTIONS or "").split(",") if f.strip()
+        )
+        self._wren_config = WrenConfig(strict_mode=settings.WREN_STRICT_MODE,
+                                       denied_functions=extra_denied)
+        self._engines: list = [self._build_engine() for _ in range(self._pool_size)]
+        self._rr_index = 0
+        self._rr_lock = threading.Lock()
         self._memory = WrenMemory(str(project_dir))
-        logger.info("WrenEngineService 初始化完成: {}", project_dir)
+        logger.info("WrenEngineService 初始化完成: {}（引擎池 x{}）", project_dir, self._pool_size)
+
+    def _build_engine(self):
+        return self._engine_cls(self._manifest_str, "postgres", self._connection_info,
+                                config=self._wren_config)
+
+    def _pick_engine(self):
+        """轮询取引擎（线程安全；asyncio.to_thread 并发调用时分散到不同连接）。"""
+        with self._rr_lock:
+            engine = self._engines[self._rr_index]
+            self._rr_index = (self._rr_index + 1) % len(self._engines)
+            return engine
 
     # --- 语义检索 ---
     def fetch_context(self, question: str) -> str:
@@ -97,24 +126,35 @@ class WrenEngineService:
                 return "\n\n".join(parts).strip()
             return ""
 
-    # --- SQL 翻译 + 校验 + 执行 ---
-    def dry_plan(self, sql: str) -> str:
-        """把 MDL 逻辑 SQL 翻译成目标方言物理 SQL（不查库）。"""
-        return str(self._engine.dry_plan(sql))
-
+    # --- SQL 校验 + 执行 ---
     def dry_run(self, sql: str) -> tuple[bool, str | None]:
         """校验 SQL（解析 + 合法 + 仅 MDL 内表）。返回 (ok, error)。"""
         try:
-            self._engine.dry_run(sql)
+            self._pick_engine().dry_run(sql)
             return (True, None)
         except Exception as e:
             return (False, str(e))
 
     def query(self, sql: str) -> list[dict[str, Any]]:
-        """经 Wren 引擎翻译后执行 SQL，返回 JSON 友好的行列表。"""
-        table = self._engine.query(sql)
+        """经 Wren 引擎翻译后执行 SQL，返回 JSON 友好的行列表。
+
+        行数超过 row_limit 时由引擎在外层包 LIMIT 截断（防全表拉取打爆内存）。
+        """
+        table = self._pick_engine().query(sql, limit=self._row_limit)
         return rows_json_ready(table.to_pylist())
 
+    @property
+    def row_limit(self) -> int:
+        return self._row_limit
+
+    @property
+    def pool_size(self) -> int:
+        return len(self._engines)
+
     def close(self):
-        if hasattr(self._engine, "close"):
-            self._engine.close()
+        for engine in self._engines:
+            if hasattr(engine, "close"):
+                try:
+                    engine.close()
+                except Exception:
+                    pass

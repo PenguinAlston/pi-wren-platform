@@ -8,15 +8,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-# --- Chat ---
-ChatRole = Literal["system", "user", "assistant", "tool"]
-
-
-class ChatMessage(BaseModel):
-    role: ChatRole
-    content: str
-
-
 # --- Agent events ---
 AgentEventType = Literal["plan", "tool_call", "tool_result", "observation", "answer", "error"]
 
@@ -47,12 +38,6 @@ class AgentRunResult(BaseModel):
     toolCalls: list[AgentToolCall] = Field(default_factory=list)
     durationMs: int = 0
     error: str | None = None
-
-
-# --- Data ---
-class QueryResult(BaseModel):
-    rows: list[dict[str, Any]]
-    count: int | None = None
 
 
 # --- Agent listing ---

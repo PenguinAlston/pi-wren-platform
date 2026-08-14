@@ -16,12 +16,37 @@ from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
 from app.deps import AppState
+from app.metrics import metrics
 from app.models.schemas import ChatRequest
 
 router = APIRouter()
 
 # sessionId 白名单：仅字母/数字/下划线/连字符，杜绝路径穿越
 _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _rate_limit_key(request: Request, user_id: str | None) -> str:
+    """限流键：优先用户，未认证回落到客户端 IP。"""
+    if user_id:
+        return f"user:{user_id}"
+    client = request.client.host if request.client else "unknown"
+    return f"ip:{client}"
+
+
+def _check_chat_rate_limit(state: AppState, request: Request, user_id: str | None) -> JSONResponse | None:
+    """聊天限流（LLM 成本防护）。超限返回 429，未超限返回 None。"""
+    limiter = state.rate_limit_chat
+    if limiter is None or limiter.limit == 0:
+        return None
+    key = _rate_limit_key(request, user_id)
+    if limiter.allow(key):
+        return None
+    retry = limiter.retry_after(key)
+    return JSONResponse(
+        status_code=429,
+        headers={"Retry-After": str(retry)},
+        content={"error": f"请求过于频繁，请 {retry} 秒后重试"},
+    )
 
 
 def _get_agent(state: AppState, domain: str):
@@ -52,27 +77,53 @@ async def chat_default(request: Request):
     state: AppState = request.app.state.app_state
     # 默认取第一个内置 Agent
     domain = next(iter(state.agents.keys()), "insurance")
-    return await _chat(state, domain, await request.json())
+    return await _chat(state, domain, await request.json(), request)
 
 
 @router.post("/api/agent/{domain}/chat")
 async def chat_json(domain: str, request: Request):
     """按领域 JSON 问答。"""
     state: AppState = request.app.state.app_state
-    return await _chat(state, domain, await request.json())
+    return await _chat(state, domain, await request.json(), request)
 
 
-async def _chat(state: AppState, domain: str, body: dict) -> JSONResponse:
+async def _chat(state: AppState, domain: str, body: dict, request: Request) -> JSONResponse:
     spec, err = _get_agent(state, domain)
     if err:
         return err
     req, err = _validate_request(body)
     if err:
         return err
+    user = getattr(request.state, "user", None)
+    user_id = user.user_id if user else None
 
-    logger.info("chat: domain={} session={}", domain, req.sessionId)
-    result = await spec.agent.answer(req.message, session_id=req.sessionId)
+    limited = _check_chat_rate_limit(state, request, user_id)
+    if limited:
+        return limited
+
+    logger.info("chat: domain={} session={} user={}", domain, req.sessionId, user_id or "-")
+    import time as _time
+
+    started = _time.monotonic()
+    result = await spec.agent.answer(req.message, session_id=req.sessionId, user_id=user_id)
+    metrics.observe("chat_duration", (_time.monotonic() - started) * 1000)
+    metrics.inc_counter("chat", agent=domain, status="error" if result.error else "ok")
+    await _audit_chat(state, user_id, request, req.message, result)
     return JSONResponse(content=result.model_dump())
+
+
+async def _audit_chat(state: AppState, user_id: str | None, request: Request,
+                      question: str, result) -> None:
+    """AI 问答审计：谁问了什么、生成了什么 SQL（失败不阻断，内容截断防超大日志）。"""
+    if not state.audit:
+        return
+    await state.audit.log(
+        "AI_CHAT",
+        question[:1000],
+        sql_content=(result.sql or "")[:4000] if result.sql else None,
+        ip_address=request.client.host if request.client else None,
+        user_id=user_id or "ANONYMOUS",
+    )
 
 
 @router.post("/api/agent/{domain}/chat/stream")
@@ -86,8 +137,17 @@ async def chat_stream(domain: str, request: Request):
     req, err = _validate_request(body)
     if err:
         return err
+    user = getattr(request.state, "user", None)
+    user_id = user.user_id if user else None
 
-    logger.info("chat stream: domain={} session={}", domain, req.sessionId)
+    limited = _check_chat_rate_limit(state, request, user_id)
+    if limited:
+        return limited
+
+    logger.info("chat stream: domain={} session={} user={}", domain, req.sessionId, user_id or "-")
+    import time as _time
+
+    started = _time.monotonic()
 
     async def event_generator():
         import asyncio as _asyncio
@@ -108,24 +168,36 @@ async def chat_stream(domain: str, request: Request):
 
         # 后台跑 Agent，事件通过 on_event 实时入队
         task = _asyncio.create_task(
-            spec.agent.answer(req.message, session_id=req.sessionId, on_event=on_event)
+            spec.agent.answer(req.message, session_id=req.sessionId,
+                               on_event=on_event, user_id=user_id)
         )
 
-        # 实时推送队列中的事件（逐个 yield，前端看到流式效果）
-        while not task.done():
-            try:
-                item = await _asyncio.wait_for(queue.get(), timeout=0.5)
-                yield item
-            except _asyncio.TimeoutError:
-                continue
+        # 客户端断开（GeneratorExit/CancelledError）时取消后台任务，避免空跑烧 LLM token
+        try:
+            # 实时推送队列中的事件（逐个 yield，前端看到流式效果）
+            while not task.done():
+                try:
+                    item = await _asyncio.wait_for(queue.get(), timeout=0.5)
+                    yield item
+                except _asyncio.TimeoutError:
+                    continue
 
-        # Agent 完成：排空队列里剩余的事件
-        while not queue.empty():
-            yield queue.get_nowait()
+            # Agent 完成：排空队列里剩余的事件
+            while not queue.empty():
+                yield queue.get_nowait()
 
-        # 结束帧
-        result = await task
-        yield {"event": "done", "data": _ascii_json(result.model_dump())}
+            # 结束帧（先审计后 yield：即使客户端在 done 帧断连，审计也已落库）
+            result = await task
+            metrics.observe("chat_duration", (_time.monotonic() - started) * 1000)
+            metrics.inc_counter("chat", agent=domain, status="error" if result.error else "ok")
+            await _audit_chat(state, user_id, request, req.message, result)
+            yield {"event": "done", "data": _ascii_json(result.model_dump())}
+        except GeneratorExit:
+            metrics.inc_counter("sse_disconnect", agent=domain)
+            raise
+        finally:
+            if not task.done():
+                task.cancel()
 
     # sep="\n"：sse-starlette 默认 \r\n 行尾，前端 parseSseFrames 用 split('\n\n') 切帧，
     # \r\n\r\n 中不含字面 \n\n 导致无法切帧 → 改用 \n 与 TS 版 SSE 格式（\n\n）完全一致
