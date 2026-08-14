@@ -69,30 +69,47 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = "demo"
 
     # --- WrenAI ---
-    WREN_BIN: str = "wren"
     WREN_PROJECT_DIR: str = "semantic/wren"
+    # strict mode：fail-closed 表白名单（仅工程内表/视图）+ 危险函数拦截（read_csv/dblink 等数据外读）
+    WREN_STRICT_MODE: bool = True
+    # 额外拒绝的函数（逗号分隔，叠加到 wren 内置黑名单之上）
+    WREN_DENIED_FUNCTIONS: str = ""
 
-    # --- LLM ---
-    LLM_PROVIDER: str = "openai"
+    # --- AI 查询硬约束 ---
+    # 行数上限：防"列出全部保单"类查询打爆内存/前端；达到上限时结果会被截断并提示
+    AI_QUERY_ROW_LIMIT: int = Field(500, ge=1, le=10000)
+    # 语句超时（秒）：覆盖 wren 连接器默认的 180s，与只读池 command_timeout 对齐
+    AI_QUERY_TIMEOUT_SECONDS: int = Field(30, ge=1, le=600)
+    # WrenEngine 引擎池大小：每引擎一条 psycopg 连接（懒创建），并发查询轮询分发
+    AI_ENGINE_POOL_SIZE: int = Field(4, ge=1, le=32)
+
+    # --- 限流（滑动窗口，进程内存；0 = 关闭）---
+    RATE_LIMIT_CHAT_PER_MIN: int = Field(12, ge=0)
+    RATE_LIMIT_LOGIN_PER_MIN: int = Field(10, ge=0)
+
+    # --- LLM（统一走 OpenAI 兼容接口：base_url 可指向 DashScope/DeepSeek/vLLM 等）---
     OPENAI_API_KEY: str | None = None
     OPENAI_BASE_URL: str | None = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     OPENAI_MODEL: str | None = "glm-5.2"
-    ANTHROPIC_API_KEY: str | None = None
-    ANTHROPIC_MODEL: str | None = None
-    OLLAMA_BASE_URL: str | None = "http://localhost:11434"
-    OLLAMA_MODEL: str | None = "qwen2.5:7b"
 
-    @field_validator("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "ADMIN_TOKEN", "AGENT_SECRET_KEY", mode="before")
+    @field_validator("OPENAI_API_KEY", "ADMIN_TOKEN", "AGENT_SECRET_KEY", "AUTH_SECRET", "AUTH_ADMIN_PASSWORD", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
         """空字符串环境变量（系统级覆盖）视为 None，让 .env 文件值生效。"""
         return None if (isinstance(v, str) and v.strip() == "") else v
 
     # --- Session & Custom Agents ---
-    SESSION_DIR: str | None = None
     ADMIN_TOKEN: str | None = None
     AGENT_SECRET_KEY: str | None = Field(None, min_length=8)
     AUDIT_USER_ID: str = "UADMIN"
+
+    # --- 用户认证（AUTH_ENABLED=true 时聊天/会话/传统查询均需登录）---
+    AUTH_ENABLED: bool = False
+    AUTH_SECRET: str | None = Field(None, min_length=16)  # 会话 Cookie 签名密钥
+    AUTH_ADMIN_USERNAME: str = "admin"
+    AUTH_ADMIN_PASSWORD: str | None = None  # 首次启动引导管理员口令（用户表为空时必需）
+    AUTH_SESSION_HOURS: int = Field(12, ge=1, le=168)
+    AUTH_COOKIE_NAME: str = "piwren_session"
 
     @property
     def wren_project_path(self) -> Path:
@@ -106,10 +123,6 @@ class Settings(BaseSettings):
             if (candidate / "wren_project.yml").exists():
                 return candidate.resolve()
         return (cwd / self.WREN_PROJECT_DIR).resolve()
-
-    @property
-    def sessions_root(self) -> Path:
-        return Path(self.SESSION_DIR) if self.SESSION_DIR else Path.cwd() / "data" / "sessions"
 
 
 @lru_cache

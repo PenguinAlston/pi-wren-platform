@@ -20,6 +20,13 @@ def _default_name(question: str) -> str:
     return single[:30] + "…" if len(single) > 30 else single
 
 
+def can_access_session(owner_id: str | None, current_user_id: str | None, is_admin: bool) -> bool:
+    """会话归属判定：本人可访问；admin 可访问全部（含认证启用前的历史会话 owner=NULL）。"""
+    if is_admin:
+        return True
+    return owner_id is not None and owner_id == current_user_id
+
+
 class DbSessionStore:
     """PostgreSQL 多轮会话仓库：save/get/get_history/list/rename/delete。"""
 
@@ -28,21 +35,22 @@ class DbSessionStore:
 
     # --- 写 ---
     async def save(self, session_id: str, question: str, answer: str, sql: str | None,
-                   data: list, agent_id: str | None = None) -> None:
-        """追加一轮对话。首次写入时建会话主表行（ON CONFLICT DO NOTHING）。"""
+                   data: list, agent_id: str | None = None,
+                   user_id: str | None = None) -> None:
+        """追加一轮对话。首次写入时建会话主表行并记录归属用户（ON CONFLICT 不覆盖 owner）。"""
         if not _SESSION_ID_RE.match(session_id):
             raise ValueError(f"invalid sessionId: {session_id}")
         aid = agent_id or _DEFAULT_AGENT_ID
         async with self._pool.acquire() as conn:
             async with conn.transaction():
-                # 会话主表行：首次用首条 question 作默认名（若已存在则保持原 session_name）
+                # 会话主表行：首次用首条 question 作默认名并写入归属用户（已存在则仅刷新时间，不改 owner）
                 await conn.execute(
                     """
-                    INSERT INTO ai_chat_session (session_id, agent_id, session_name, create_time, update_time)
-                    VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    INSERT INTO ai_chat_session (session_id, user_id, agent_id, session_name, create_time, update_time)
+                    VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     ON CONFLICT (session_id) DO UPDATE SET update_time = CURRENT_TIMESTAMP
                     """,
-                    session_id, aid, _default_name(question),
+                    session_id, user_id, aid, _default_name(question),
                 )
                 await conn.execute(
                     """
@@ -91,34 +99,30 @@ class DbSessionStore:
         records = await self.get_history(session_id)
         return records[-1] if records else None
 
-    async def list_sessions(self, agent_id: str | None = None) -> list[dict]:
-        """会话列表（按 update_time 倒序）。agent_id 非空时仅返回该 Agent 的会话。"""
+    async def list_sessions(self, agent_id: str | None = None,
+                            user_id: str | None = None) -> list[dict]:
+        """会话列表（按 update_time 倒序）。agent_id 非空时按 Agent 过滤；user_id 非空时仅返回该用户的会话。"""
+        conditions = ["COALESCE(s.is_delete, '0') = '0'"]
+        args: list = []
+        if agent_id is not None:
+            args.append(agent_id)
+            conditions.append(f"s.agent_id = ${len(args)}")
+        if user_id is not None:
+            args.append(user_id)
+            conditions.append(f"s.user_id = ${len(args)}")
         async with self._pool.acquire() as conn:
-            if agent_id is not None:
-                rows = await conn.fetch(
-                    """
-                    SELECT s.session_id, s.session_name, s.agent_id, s.create_time, s.update_time,
-                           COALESCE(c.cnt, 0) AS message_count
-                    FROM ai_chat_session s
-                    LEFT JOIN (SELECT session_id, COUNT(*) AS cnt FROM ai_chat_message GROUP BY session_id) c
-                      ON c.session_id = s.session_id
-                    WHERE s.agent_id = $1 AND COALESCE(s.is_delete, '0') = '0'
-                    ORDER BY s.update_time DESC
-                    """,
-                    agent_id,
-                )
-            else:
-                rows = await conn.fetch(
-                    """
-                    SELECT s.session_id, s.session_name, s.agent_id, s.create_time, s.update_time,
-                           COALESCE(c.cnt, 0) AS message_count
-                    FROM ai_chat_session s
-                    LEFT JOIN (SELECT session_id, COUNT(*) AS cnt FROM ai_chat_message GROUP BY session_id) c
-                      ON c.session_id = s.session_id
-                    WHERE COALESCE(s.is_delete, '0') = '0'
-                    ORDER BY s.update_time DESC
-                    """,
-                )
+            rows = await conn.fetch(
+                f"""
+                SELECT s.session_id, s.session_name, s.agent_id, s.create_time, s.update_time,
+                       COALESCE(c.cnt, 0) AS message_count
+                FROM ai_chat_session s
+                LEFT JOIN (SELECT session_id, COUNT(*) AS cnt FROM ai_chat_message GROUP BY session_id) c
+                  ON c.session_id = s.session_id
+                WHERE {" AND ".join(conditions)}
+                ORDER BY s.update_time DESC
+                """,
+                *args,
+            )
         summaries: list[dict] = []
         for r in rows:
             name = r["session_name"]
@@ -155,6 +159,14 @@ class DbSessionStore:
         if not name and records:
             name = _default_name(records[0].get("question", ""))
         return {"name": name or "", "records": records}
+
+    async def get_session_owner(self, session_id: str) -> str | None:
+        """会话归属用户（不存在返回 None；认证启用前的历史会话 owner 也为 NULL）。"""
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT user_id FROM ai_chat_session WHERE session_id = $1", session_id,
+            )
+        return row["user_id"] if row else None
 
     # --- 内部 ---
     async def _first_question(self, session_id: str) -> str | None:
