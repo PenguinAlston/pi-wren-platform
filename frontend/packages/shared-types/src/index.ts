@@ -1,36 +1,6 @@
 /**
- * Shared cross-boundary types for the pi-wren platform.
- * These types are consumed by every workspace to keep contracts consistent.
+ * 前后端共享契约类型（后端不消费；与 backend/app/models/schemas.py 保持一致）。
  */
-
-// --- Agents & tools ---
-export interface Agent {
-  id: string;
-  name: string;
-  description?: string;
-  tools: Tool[];
-}
-
-export interface Tool {
-  name: string;
-  description: string;
-  requiresApproval?: boolean;
-}
-
-export interface AgentTask {
-  id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  input: string;
-  output?: string;
-}
-
-// --- Chat / model ---
-export type ChatRole = 'system' | 'user' | 'assistant' | 'tool';
-
-export interface ChatMessage {
-  role: ChatRole;
-  content: string;
-}
 
 // --- Agent events & runs ---
 export type AgentEventType =
@@ -67,23 +37,4 @@ export interface AgentRunResult {
   toolCalls: AgentToolCall[];
   durationMs: number;
   error?: string;
-}
-
-// --- Data / context ---
-export interface QueryResult {
-  rows: Record<string, unknown>[];
-  count: number | null;
-}
-
-export interface MetricDefinition {
-  name: string;
-  definition: string;
-  value?: number;
-  unit?: string;
-}
-
-export interface ContextResult {
-  source: string;
-  content: string;
-  confidence?: number;
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Input, Modal, Switch } from 'animal-island-ui';
+import { apiFetch } from '../lib/api';
 
 interface CustomAgentView {
   agentId: string;
@@ -74,7 +75,7 @@ export default function AgentsPage() {
 
   const api = useCallback(
     async (path: string, init?: RequestInit) => {
-      const response = await fetch(`/api${path}`, {
+      const response = await apiFetch(`/api${path}`, {
         ...init,
         headers: {
           'Content-Type': 'application/json',

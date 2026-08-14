@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button, Input } from 'animal-island-ui';
+import { apiFetch } from '../lib/api';
 import DetailDrawer, { type DetailPayload } from './components/DetailDrawer';
 import {
   MODULES,
@@ -133,8 +134,8 @@ function QueryPageInner() {
     void (async () => {
       try {
         const [dictResponse, orgResponse] = await Promise.all([
-          fetch('/api/dicts').then((r) => r.json() as Promise<{ dicts: Record<string, DictOption[]> }>),
-          fetch('/api/orgs').then((r) => r.json() as Promise<{ orgs: OrgOption[] }>),
+          apiFetch('/api/dicts').then((r) => r.json() as Promise<{ dicts: Record<string, DictOption[]> }>),
+          apiFetch('/api/orgs').then((r) => r.json() as Promise<{ orgs: OrgOption[] }>),
         ]);
         setDicts(dictResponse.dicts);
         setOrgs(orgResponse.orgs);
@@ -150,7 +151,7 @@ function QueryPageInner() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/traditional/${moduleId}/query`, {
+        const response = await apiFetch(`/api/traditional/${moduleId}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -202,7 +203,7 @@ function QueryPageInner() {
     setDetailLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/traditional/${targetModule}/${encodeURIComponent(id)}/detail`);
+      const response = await apiFetch(`/api/traditional/${targetModule}/${encodeURIComponent(id)}/detail`);
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? `详情加载失败（${response.status}）`);
@@ -220,7 +221,7 @@ function QueryPageInner() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/traditional/${moduleId}/export`, {
+      const response = await apiFetch(`/api/traditional/${moduleId}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

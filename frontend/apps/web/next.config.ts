@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // 容器化部署用 standalone 产物（.next/standalone）；本地 pnpm build 不受影响
+  output: 'standalone',
   experimental: {
     // 上游 LLM 推理较慢，放宽代理超时（默认 30s 会导致 500）
     proxyTimeout: 120_000,

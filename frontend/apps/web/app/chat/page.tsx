@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Collapse } from 'animal-island-ui';
 import type { AgentEvent, AgentRunResult } from '@pi-wren/shared-types';
+import { apiFetch } from '../lib/api';
 import ChatChart from './components/ChatChart';
 import ChatResultTable from './components/ChatResultTable';
 import SessionSidebar, { type SessionSummary } from './components/SessionSidebar';
@@ -86,7 +87,7 @@ export default function ChatPage() {
     const agentId = agent ?? domain;
     if (agentId) params.set('agentId', agentId);
     try {
-      const response = await fetch(`/api/sessions${params.toString() ? `?${params.toString()}` : ''}`);
+      const response = await apiFetch(`/api/sessions${params.toString() ? `?${params.toString()}` : ''}`);
       if (response.ok) {
         const body = (await response.json()) as { sessions: SessionSummary[] };
         setSessions(body.sessions ?? []);
@@ -97,7 +98,7 @@ export default function ChatPage() {
   }, [sessionsSearch, domain]);
 
   useEffect(() => {
-    fetch('/api/agents')
+    apiFetch('/api/agents')
       .then((response) => response.json())
       .then((data: { agents: AgentInfo[] }) => {
         if (data.agents.length > 0) {
@@ -147,7 +148,7 @@ export default function ChatPage() {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 120_000);
       try {
-        const response = await fetch(`/api/agent/${domain}/chat/stream`, {
+        const response = await apiFetch(`/api/agent/${domain}/chat/stream`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message, sessionId: activeSessionId }),
@@ -228,7 +229,7 @@ export default function ChatPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+      const response = await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
       if (!response.ok) {
         throw new Error(`会话加载失败（${response.status}）`);
       }
@@ -264,7 +265,7 @@ export default function ChatPage() {
 
   const renameSession = useCallback(
     async (sessionId: string, name: string) => {
-      await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+      await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -276,7 +277,7 @@ export default function ChatPage() {
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
-      const response = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+      const response = await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
         method: 'DELETE',
       });
       if (response.ok) {

@@ -33,6 +33,7 @@ const MENU: MenuItem[] = [
   },
   { href: '/chat', label: 'AI 智能问答', group: '业务查询', isActive: (p) => p === '/chat' },
   { href: '/agents', label: '自定义 Agent', group: '系统管理', isActive: (p) => p === '/agents' },
+  { href: '/users', label: '用户管理', group: '系统管理', isActive: (p) => p === '/users' },
 ];
 
 const GROUPS = ['导航', '业务查询', '系统管理'];

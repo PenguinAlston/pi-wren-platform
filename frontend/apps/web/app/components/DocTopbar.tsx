@@ -65,6 +65,7 @@ function DocTopbarInner() {
   const search = useSearchParams();
   const clock = useClock();
   const [online, setOnline] = useState<boolean | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const { title, crumb } = resolveTitle(pathname, search);
 
   useEffect(() => {
@@ -86,6 +87,35 @@ function DocTopbarInner() {
     };
   }, []);
 
+  // 登录状态（AUTH_ENABLED=false 时接口返回 enabled:false，不显示用户区）
+  useEffect(() => {
+    let cancelled = false;
+    if (pathname.startsWith('/login')) {
+      return;
+    }
+    fetch('/api/auth/me')
+      .then(async (response) => {
+        const body = (await response.json().catch(() => ({}))) as {
+          enabled?: boolean;
+          user?: { displayName: string } | null;
+        };
+        if (!cancelled && body.enabled && body.user) {
+          setUserName(body.user.displayName);
+        }
+      })
+      .catch(() => {
+        /* 未启用认证或服务未就绪 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
+
+  async function logout() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    window.location.href = '/login';
+  }
+
   return (
     <header className="doc-topbar">
       <div className="doc-topbar-title">
@@ -98,6 +128,12 @@ function DocTopbarInner() {
           <i />
           {online === true ? 'SYS·OK' : online === false ? 'SYS·ERR' : 'SYS·…'}
         </span>
+        {userName && (
+          <span className="topbar-status" style={{ cursor: 'pointer' }} onClick={logout} title="退出登录">
+            <i />
+            {userName} · 退出
+          </span>
+        )}
       </div>
     </header>
   );
