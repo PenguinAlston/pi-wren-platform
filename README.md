@@ -28,6 +28,7 @@ uvicorn app.main:app --port 8080 --reload
 
 # 3. 安装并启动前端（Next.js，:3000，另开终端）
 cd ..
+cd frontend
 pnpm install
 pnpm dev
 ```
@@ -86,10 +87,10 @@ pytest                                       # 测试
 前端（仓库根）：
 
 ```bash
-pnpm dev          # 启动 Web（:3000，仅前端；后端需单独 uvicorn 起）
-pnpm build        # 构建
-pnpm lint         # ESLint
-pnpm typecheck    # TypeScript 类型检查
+cd frontend && pnpm dev  # 启动 Web（:3000，仅前端；后端需单独 uvicorn 起）
+pnpm build        # 构建（frontend/ 内）
+pnpm lint         # ESLint（frontend/ 内）
+pnpm typecheck    # 类型检查（frontend/ 内）
 ```
 
 ## 项目结构

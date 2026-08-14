@@ -4,11 +4,11 @@
 
 ## 项目结构与模块划分
 
-混合技术栈单仓：**后端为 Python（`backend/`，FastAPI），前端为 TypeScript（`apps/web`，Next.js，由 pnpm workspace 管理）**。
+混合技术栈单仓：**后端为 Python（`backend/`，FastAPI），前端为 TypeScript（`frontend/`，pnpm workspace：`apps/web` Next.js + `packages/shared-types`）**，前后端各自独立成目录。
 
-- `backend/` — Python 后端（FastAPI + WrenAI 进程内 SDK + LangChain/LangGraph）：健康检查、`/api/agents`、`/api/agent/{domain}/chat`、`/api/agent/{domain}/chat/stream`（SSE 流式）、自定义 Agent 管理（`app/routers/`）、语义层（`app/semantic/`）、注册表/加密/审计（`app/registry/`）、数据层（`app/data/db.py`，asyncpg）
-- `apps/web` — Next.js 聊天控制台（`app/chat/`）+ 自定义 Agent 管理页（`app/agents/`）：WrenAI 工程 JSON 粘贴、连接测试、注册/启停/编辑/删除、池监控；通过 `next.config.ts` 把 `/api/*` 代理到 `:8080` 后端
-- `packages/shared-types` — 前端共享类型（`src/index.ts`）；后端不消费
+- `backend/` — Python 后端（FastAPI + WrenAI 进程内 SDK + LangChain/LangGraph）：健康检查、`/api/agents`、`/api/agent/{domain}/chat`、`/api/agent/{domain}/chat/stream`（SSE 流式）、自定义 Agent 管理（`app/routers/`）、语义层（`app/semantic/`）、注册表/加密/审计/自定义 Agent 工厂（`app/registry/`）、用户认证（`app/auth/`）、限流（`app/ratelimit.py`）、指标（`app/metrics.py`）、数据层（`app/data/db.py`，asyncpg）
+- `frontend/apps/web` — Next.js 聊天控制台（`app/chat/`）+ 自定义 Agent 管理页（`app/agents/`）：WrenAI 工程 JSON 粘贴、连接测试、注册/启停/编辑/删除、池监控；通过 `next.config.ts` 把 `/api/*` 代理到 `:8080` 后端
+- `frontend/packages/shared-types` — 前端共享类型（`src/index.ts`）；后端不消费
 - `semantic/wren/` — WrenAI 原生语义工程（schema_version 5）：`wren_project.yml` + `models/*/metadata.yml` + `relationships.yml` + `knowledge/{rules,sql}/`（单一语义源）
 - `infra/postgres` — 建表与种子数据（`insurance_schema.sql`、`insurance_seed.sql`、`agent_config.sql` 自定义 Agent 表、`z_admin_seed.sql` 审计主体）；`examples/wren-project-template.json` — 自定义 Agent 工程模板；`docs` — 架构与路线图
 
@@ -43,13 +43,13 @@
 - `pip install -e backend[dev]`（或 `pip install -e '.[dev]'` 在 `backend/` 内）— 安装依赖（国内源 `-i https://pypi.tuna.tsinghua.edu.cn/simple`）
 - `uvicorn app.main:app --port 8080 --reload`（在 `backend/` 内）— 启动 API（:8080）
 - `pytest backend/tests`（或 `pytest` 在 `backend/` 内）— 运行测试
-- 配置：仓库根 `.env`（参考 `.env.example`），后端用 pydantic-settings 自动加载；`LLM_PROVIDER`（`openai|anthropic|ollama`）必配为真实 provider；`ADMIN_TOKEN`（管理面鉴权）+ `AGENT_SECRET_KEY`（连接串加密密钥，配置后才启用自定义 Agent）
+- 配置：仓库根 `.env`（参考 `.env.example`），后端用 pydantic-settings 自动加载；`OPENAI_API_KEY`/`OPENAI_BASE_URL`/`OPENAI_MODEL` 必配（LLM 统一走 OpenAI 兼容接口）；`ADMIN_TOKEN`（管理面鉴权）+ `AGENT_SECRET_KEY`（连接串加密密钥，配置后才启用自定义 Agent）；`AUTH_ENABLED=true`（生产必须，登录鉴权 + 会话归属隔离 + 用户管理）
 
 前端（TypeScript，在仓库根）：
 
-- `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `pnpm-workspace.yaml` 的 `allowBuilds`）
-- `pnpm dev` 或 `pnpm dev:web` — 启动 Web（:3000）。**注意：`pnpm dev` 现在只起前端，后端需单独 `uvicorn` 起**。不要在 dev 运行时执行 `pnpm build`（`.next` 缓存冲突）
-- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 前端构建/Lint/类型检查/测试
+- 在 `frontend/` 内执行 `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `frontend/pnpm-workspace.yaml` 的 `allowBuilds`）
+- `pnpm dev` 或 `pnpm dev:web`（在 `frontend/` 内）— 启动 Web（:3000）。**注意：`pnpm dev` 现在只起前端，后端需单独 `uvicorn` 起**。不要在 dev 运行时执行 `pnpm build`（`.next` 缓存冲突）
+- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test`（在 `frontend/` 内）— 前端构建/Lint/类型检查/测试
 
 基础设施：
 
@@ -59,13 +59,13 @@
 
 后端（Python）：4 空格缩进；模块 snake_case（`db_introspect.py`），函数/变量 snake_case，类 PascalCase；类型注解（`from __future__ import annotations`）；FastAPI 路由 + asyncpg 异步；pydantic-settings 校验环境配置。
 
-前端（TypeScript，仅 `apps/web`）：2 空格缩进，分号，单引号（Prettier 强制）；strict 模式、`verbatimModuleSyntax`、`noUncheckedIndexedAccess`；文件名 kebab-case，函数/变量 camelCase。
+前端（TypeScript，仅 `frontend/apps/web`）：2 空格缩进，分号，单引号（Prettier 强制）；strict 模式、`verbatimModuleSyntax`、`noUncheckedIndexedAccess`；文件名 kebab-case，函数/变量 camelCase。
 
 ## 测试指南
 
-后端：pytest + pytest-asyncio（`asyncio_mode = "auto"`），测试在 `backend/tests/`，命名 `test_*.py`；纯函数测试（`test_result_analysis.py`、`test_db_introspect.py`、`test_sql_validation.py`、`test_crypto.py`）+ jsonl 会话存储测试（`test_jsonl_store.py`）。内省组装逻辑用纯函数测（喂固定 rows），DB 查询部分不测（项目无 DB fixture）。
+后端：pytest + pytest-asyncio（`asyncio_mode = "auto"`），测试在 `backend/tests/`，命名 `test_*.py`；纯函数测试（`test_result_analysis.py`、`test_db_introspect.py`、`test_sql_validation.py`、`test_crypto.py`、`test_ratelimit.py`、`test_metrics.py`）+ 认证（口令/令牌/中间件/用户管理）+ 会话存储（`test_session_ownership.py`，假池记录 SQL）+ `test_golden_sql.py`（真实 MDL dry_plan 回归集，wrenai 升级防护；本地需先 `wren context build`）。内省组装逻辑用纯函数测（喂固定 rows），DB 查询部分不测（项目无 DB fixture）。
 
-前端：Vitest（如 `apps/web` 有 `*.test.ts`）。
+前端：Vitest（如 `frontend/apps/web` 有 `*.test.ts`）。
 
 ## 提交与 PR 指南
 
