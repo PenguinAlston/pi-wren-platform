@@ -4,11 +4,6 @@
 -- 说明：datetime -> timestamp；longtext -> text
 -- =====================================================================
 
--- 清理旧版 demo 表（文档版表结构以 ins_ 前缀为准）
-DROP TABLE IF EXISTS insurance_payment CASCADE;
-DROP TABLE IF EXISTS insurance_claim CASCADE;
-DROP TABLE IF EXISTS insurance_policy CASCADE;
-
 -- ---------------------------------------------------------------------
 -- 5.1 系统基础公共域
 -- ---------------------------------------------------------------------

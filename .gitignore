@@ -50,6 +50,9 @@ __pycache__/
 # Tooling
 .zcode/
 
-# backend/app/data 是 Python 数据层源码（非运行时数据），放行
+# backend/app/data 是 Python 数据层源码（非运行时数据），放行；
+# 但其中的缓存目录仍要忽略（negation 之后需再次显式排除才生效）
 !backend/app/data/
 !backend/app/data/**
+backend/app/data/__pycache__/
+backend/app/data/**/*.pyc
