@@ -36,8 +36,11 @@ class DbSessionStore:
     # --- 写 ---
     async def save(self, session_id: str, question: str, answer: str, sql: str | None,
                    data: list, agent_id: str | None = None,
-                   user_id: str | None = None) -> None:
-        """追加一轮对话。首次写入时建会话主表行并记录归属用户（ON CONFLICT 不覆盖 owner）。"""
+                   user_id: str | None = None) -> int | None:
+        """追加一轮对话，返回消息 id（反馈功能以此定位回答；无返回时为 None）。
+
+        首次写入时建会话主表行并记录归属用户（ON CONFLICT 不覆盖 owner）。
+        """
         if not _SESSION_ID_RE.match(session_id):
             raise ValueError(f"invalid sessionId: {session_id}")
         aid = agent_id or _DEFAULT_AGENT_ID
@@ -52,14 +55,16 @@ class DbSessionStore:
                     """,
                     session_id, user_id, aid, _default_name(question),
                 )
-                await conn.execute(
+                message_id = await conn.fetchval(
                     """
                     INSERT INTO ai_chat_message (session_id, question, answer, sql_text, data_json, create_time)
                     VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+                    RETURNING id
                     """,
                     session_id, question, answer, sql,
                     json.dumps(data, ensure_ascii=False) if data else None,
                 )
+        return int(message_id) if message_id is not None else None
 
     async def rename(self, session_id: str, name: str) -> None:
         if not _SESSION_ID_RE.match(session_id):
@@ -88,7 +93,7 @@ class DbSessionStore:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT question, answer, sql_text, data_json, create_time
+                SELECT id, question, answer, sql_text, data_json, create_time
                 FROM ai_chat_message WHERE session_id = $1 ORDER BY create_time, id
                 """,
                 session_id,
@@ -141,6 +146,7 @@ class DbSessionStore:
         return summaries
 
     async def get_session(self, session_id: str) -> dict | None:
+        """会话详情：消息带 id 与已提交反馈（历史回看时前端据此渲染反馈按钮状态）。"""
         async with self._pool.acquire() as conn:
             sess = await conn.fetchrow(
                 "SELECT session_name FROM ai_chat_session WHERE session_id = $1", session_id,
@@ -149,13 +155,16 @@ class DbSessionStore:
                 return None
             rows = await conn.fetch(
                 """
-                SELECT question, answer, sql_text, data_json, create_time
-                FROM ai_chat_message WHERE session_id = $1 ORDER BY create_time, id
+                SELECT m.id, m.question, m.answer, m.sql_text, m.data_json, m.create_time,
+                       f.rating AS feedback_rating, f.comment AS feedback_comment
+                FROM ai_chat_message m
+                LEFT JOIN ai_chat_feedback f ON f.message_id = m.id
+                WHERE m.session_id = $1 ORDER BY m.create_time, m.id
                 """,
                 session_id,
             )
         name = sess["session_name"]
-        records = [self._row_to_record(r) for r in rows]
+        records = [self._row_to_record(r, with_feedback=True) for r in rows]
         if not name and records:
             name = _default_name(records[0].get("question", ""))
         return {"name": name or "", "records": records}
@@ -179,15 +188,18 @@ class DbSessionStore:
         return row["question"] if row else None
 
     @staticmethod
-    def _row_to_record(row: asyncpg.Record) -> dict[str, Any]:
-        """数据库行 → 与 jsonl record 一致的 dict（前端/详情端点消费此结构）。"""
+    def _row_to_record(row: asyncpg.Record, with_feedback: bool = False) -> dict[str, Any]:
+        """数据库行 → 与 jsonl record 一致的 dict（前端/详情端点消费此结构）。
+
+        with_feedback=True 时（get_session 路径）额外带出 id 与 feedback。
+        """
         data: Any = None
         if row["data_json"]:
             try:
                 data = json.loads(row["data_json"])
             except (json.JSONDecodeError, TypeError):
                 data = None
-        return {
+        record: dict[str, Any] = {
             "sessionId": None,  # 调用方按需填，列表/详情端点不依赖此字段
             "question": row["question"] or "",
             "answer": row["answer"] or "",
@@ -195,3 +207,11 @@ class DbSessionStore:
             "data": data if isinstance(data, list) else [],
             "createdAt": row["create_time"].isoformat() if row["create_time"] else "",
         }
+        if with_feedback:
+            record["id"] = row["id"]
+            rating = row["feedback_rating"]
+            record["feedback"] = (
+                {"rating": int(rating), "comment": row["feedback_comment"]}
+                if rating is not None else None
+            )
+        return record

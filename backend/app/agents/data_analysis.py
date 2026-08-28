@@ -201,14 +201,15 @@ class DataAnalysisAgent:
             emit("answer", "生成业务回答", answer_text)
 
             # 保存会话（带 domain，便于按 Agent 隔离会话列表；user_id 用于多用户归属）
+            message_id: int | None = None
             if self._memory:
-                await self._memory.save(sid, question, answer_text, sql, rows,
-                                        agent_id=self._domain.id, user_id=user_id)
+                message_id = await self._memory.save(sid, question, answer_text, sql, rows,
+                                                     agent_id=self._domain.id, user_id=user_id)
 
             return AgentRunResult(
                 sessionId=sid, answer=answer_text, sql=sql, data=rows,
                 trace=trace, events=events, toolCalls=tool_calls,
-                durationMs=int((time.time() - started) * 1000),
+                durationMs=int((time.time() - started) * 1000), messageId=message_id,
             )
 
         except Exception as e:

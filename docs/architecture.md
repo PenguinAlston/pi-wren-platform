@@ -164,11 +164,12 @@ pi-wren-platform/
 
 ## 会话存储
 
-`DbSessionStore`（`session/db_store.py`）：PostgreSQL 两表模型——`ai_chat_session`（会话主表，含 `agent_id` 隔离与 `user_id` 归属）+ `ai_chat_message`（每轮问题/回答/SQL/结果 JSON）。多轮续聊注入最近 3 轮历史；会话列表/重命名/删除经 `/api/sessions*` 管理。
+`DbSessionStore`（`session/db_store.py`）：PostgreSQL 两表模型——`ai_chat_session`（会话主表，含 `agent_id` 隔离与 `user_id` 归属）+ `ai_chat_message`（每轮问题/回答/SQL/结果 JSON）。多轮续聊注入最近 3 轮历史；会话列表/重命名/删除经 `/api/sessions*` 管理。每条回答可提交反馈（`ai_chat_feedback` 表，1=赞/-1=踩，`UNIQUE(message_id)` UPSERT；`FeedbackStore.ensure_table` 自愈补表），历史回看带出反馈状态，admin 经 `GET /api/admin/feedback` 复盘点踩案例。
 
-## 效果闭环（评测回归集）
+## 效果闭环（评测 + 反馈）
 
-- **评测回归集**（`backend/evals/`）：30 条中文案例（`cases/insurance.json`，expectedTables 白名单 + answerMust 关键点），`python -m evals.run_eval` 真实跑 `DataAnalysisAgent.answer()` 全链路（需 DB/LLM/MDL，不进默认 CI），确定性校验（流水线成功/触达表/行数/关键点）+ 可选 `--judge` LLM 评审（关键点覆盖 + 编造检测），报告落 `evals/reports/`。
+- **评测回归集**（`backend/evals/`）：30 条中文案例（`cases/insurance.json`，expectedTables 白名单 + answerMust 关键点），`python -m evals.run_eval` 真实跑 `DataAnalysisAgent.answer()` 全链路（需 DB/LLM/MDL，不进默认 CI），确定性校验（流水线成功/触达表/行数/关键点）+ 可选 `--judge` LLM 评审（关键点覆盖 + 编造检测），报告落 `evals/reports/`。点踩案例沉淀进评测集是迭代入口。
+- **反馈指标**：`piwren_feedback_total{rating=up|down}` 计数经 `/api/metrics` 暴露。
 
 ## 引擎池与限流
 
@@ -181,7 +182,7 @@ pi-wren-platform/
 |---|---|
 | 问答 | `POST /api/agent/chat`（默认 Agent）· `POST /api/agent/{domain}/chat` · `POST /api/agent/{domain}/chat/stream`（SSE） |
 | Agent | `GET /api/agents`（内置 + 自定义） |
-| 会话 | `GET /api/sessions` · `GET/PUT/DELETE /api/sessions/{id}` |
+| 会话 | `GET /api/sessions` · `GET/PUT/DELETE /api/sessions/{id}` · `PUT/DELETE /api/sessions/{id}/messages/{messageId}/feedback`（回答反馈，同值再点取消） |
 | 自定义 Agent 管理 | `GET/POST /api/admin/agents` · `GET/PUT/DELETE /api/admin/agents/{id}` · `GET /api/admin/agents/{id}/status` · `POST /api/admin/agents/test`（连接测试）· `POST /api/admin/agents/{id}/test` · `POST /api/admin/agents/validate-project` · `POST /api/admin/agents/import-from-db` |
 | 传统查询 | `POST /api/traditional/contract/query|export` · `POST /api/traditional/claim/query` · `POST /api/traditional/preserve/query` · `GET /api/traditional/{contract|claim|preserve}/{id}/detail` · `GET /api/dicts` · `GET /api/orgs` |
 | 健康与指标 | `GET /api/health` · `GET /health` · `GET /api/metrics`（Prometheus 文本，admin 可见） |
@@ -210,7 +211,7 @@ pi-wren-platform/
 
 ## 当前边界与演进方向
 
-**已可用**：自然语言查真实数据库 + 业务分析摘要（保险 Agent）、SSE 流式执行轨迹、PostgreSQL 多轮会话、用户认证 + 会话归属隔离 + 用户管理（`AUTH_ENABLED`）、AI 问答审计、查询行数/超时硬约束、WrenAI strict mode + golden SQL 回归集、WrenEngine 引擎池（内置 + 自定义 Agent）、限流（聊天/登录）、基础指标暴露（`/api/metrics`）、容器化部署物、自定义 Agent 全生命周期（注册/启停/编辑/删除/连接测试/从数据库导入）、传统查询接口、NL→SQL 评测回归集（`backend/evals/`）。
+**已可用**：自然语言查真实数据库 + 业务分析摘要（保险 Agent）、SSE 流式执行轨迹、PostgreSQL 多轮会话、用户认证 + 会话归属隔离 + 用户管理（`AUTH_ENABLED`）、AI 问答审计、查询行数/超时硬约束、WrenAI strict mode + golden SQL 回归集、WrenEngine 引擎池（内置 + 自定义 Agent）、限流（聊天/登录）、基础指标暴露（`/api/metrics`）、容器化部署物、自定义 Agent 全生命周期（注册/启停/编辑/删除/连接测试/从数据库导入）、传统查询接口、NL→SQL 评测回归集（`backend/evals/`）、回答反馈（点赞/点踩落库 + admin 复盘清单）。
 
 **待加固**（详见 [enterprise-roadmap.md](enterprise-roadmap.md)）：
 

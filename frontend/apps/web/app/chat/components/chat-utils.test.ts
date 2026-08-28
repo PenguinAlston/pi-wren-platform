@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { detectChart, formatCell, toCsv } from './chat-utils';
+import { detectChart, formatCell, nextFeedback, toCsv } from './chat-utils';
+
+describe('nextFeedback', () => {
+  it('sets rating on first click', () => {
+    expect(nextFeedback(null, 'up')).toBe('up');
+    expect(nextFeedback(null, 'down')).toBe('down');
+    expect(nextFeedback('up', 'down')).toBe('down');
+  });
+
+  it('clears rating when clicking the same button again', () => {
+    expect(nextFeedback('up', 'up')).toBeNull();
+    expect(nextFeedback('down', 'down')).toBeNull();
+  });
+});
 
 describe('detectChart', () => {
   it('detects pie for single value with few categories', () => {

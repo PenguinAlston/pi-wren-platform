@@ -22,6 +22,7 @@ from app.registry.store import AgentConfigStore
 from app.semantic.mdl_loader import load_allowed_tables
 from app.semantic.wren_engine import WrenEngineService
 from app.session.db_store import DbSessionStore
+from app.session.feedback_store import FeedbackStore
 
 
 @dataclass
@@ -50,6 +51,7 @@ class AppState:
     pool: asyncpg.Pool  # 传统查询只读池
     memory: DbSessionStore
     audit: OperationAuditLogger
+    feedback: FeedbackStore  # 回答反馈（效果闭环）
     insurance: InsuranceQueryService
     users: UserStore | None = None  # AUTH_ENABLED 时非空
     agent_store: AgentConfigStore | None = None  # 自定义 Agent 持久化
@@ -78,6 +80,9 @@ async def build_state(settings: Settings) -> AppState:
 
     memory = DbSessionStore(writable_pool)
     audit = OperationAuditLogger(writable_pool, settings.AUDIT_USER_ID)
+    # 回答反馈（ensure_table 兼容存量库；新库由 docker init 建表）
+    feedback = FeedbackStore(writable_pool)
+    await feedback.ensure_table()
 
     # 内置 Agent（当前仅保险）
     agents: dict[str, AgentSpec] = {}
@@ -127,5 +132,5 @@ async def build_state(settings: Settings) -> AppState:
     logger.info("依赖初始化完成: agents={}", list(agents.keys()))
     return AppState(settings=settings, agents=agents, engine=engine, pool=pool,
                     memory=memory, agent_store=agent_store, agent_registry=agent_registry,
-                    audit=audit, insurance=insurance, users=users,
+                    audit=audit, feedback=feedback, insurance=insurance, users=users,
                     rate_limit_chat=rate_limit_chat, rate_limit_login=rate_limit_login)

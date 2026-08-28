@@ -1,4 +1,4 @@
-/** AI 问答页纯工具函数：图表类型识别 / CSV 导出 / 时间与单元格格式化。 */
+/** AI 问答页纯工具函数：图表类型识别 / CSV 导出 / 时间与单元格格式化 / 反馈状态机。 */
 
 export type ChartKind = 'line' | 'bar' | 'pie';
 
@@ -6,6 +6,14 @@ export interface ChartSpec {
   type: ChartKind;
   labelKey: string;
   valueKeys: string[];
+}
+
+export type FeedbackRating = 'up' | 'down';
+export type FeedbackValue = FeedbackRating | null;
+
+/** 点击反馈按钮后的新状态：同值再点 = 取消。 */
+export function nextFeedback(current: FeedbackValue, clicked: FeedbackRating): FeedbackValue {
+  return current === clicked ? null : clicked;
 }
 
 function toNumber(value: unknown): number | undefined {

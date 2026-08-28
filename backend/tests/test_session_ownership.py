@@ -49,6 +49,11 @@ class FakeConn:
         self._rec.append((sql, args))
         return None
 
+    async def fetchval(self, sql, *args):
+        """save() 的 INSERT ... RETURNING id 走 fetchval；假池返回固定 id 便于断言。"""
+        self._rec.append((sql, args))
+        return 42
+
     def transaction(self):
         import contextlib
 

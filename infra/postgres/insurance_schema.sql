@@ -353,3 +353,20 @@ CREATE TABLE ins_claim_audit (
 COMMENT ON TABLE ins_claim_audit IS '理赔审核记录表：立案/查勘/复核/终审';
 COMMENT ON COLUMN ins_claim_audit.audit_stage IS '审核阶段：立案审核/查勘审核/赔付复核/终审';
 COMMENT ON COLUMN ins_claim_audit.audit_result IS '审核结果：01-通过 02-驳回 03-待补充资料';
+
+-- ============================================================
+-- AI 问答反馈（效果闭环：点赞/点踩；每条回答一条，重复提交 UPSERT 覆盖）
+-- ============================================================
+CREATE TABLE ai_chat_feedback (
+    id          bigserial PRIMARY KEY,
+    message_id  bigint NOT NULL REFERENCES ai_chat_message(id) ON DELETE CASCADE,
+    session_id  varchar(64) NOT NULL,
+    user_id     varchar(64),
+    rating      smallint NOT NULL CHECK (rating IN (1, -1)),
+    comment     text,
+    created_at  timestamp DEFAULT CURRENT_TIMESTAMP,
+    updated_at  timestamp DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (message_id)
+);
+COMMENT ON TABLE ai_chat_feedback IS 'AI 问答反馈表：rating 1=赞 -1=踩，message_id 唯一';
+CREATE INDEX idx_feedback_rating ON ai_chat_feedback(rating, created_at);

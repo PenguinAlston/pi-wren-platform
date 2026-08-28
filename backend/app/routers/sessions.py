@@ -1,4 +1,4 @@
-"""会话管理路由（对应 TS routes/sessions.ts）：列表/回看/重命名/删除。
+"""会话管理路由（对应 TS routes/sessions.ts）：列表/回看/重命名/删除 + 回答反馈。
 
 认证启用时按用户归属隔离（本人仅见自己的会话；admin 可见全部，含认证前的历史会话）。
 """
@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import re
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from app.auth.admin import require_admin
+from app.metrics import metrics
 from app.session.db_store import can_access_session
 
 router = APIRouter()
@@ -18,6 +20,10 @@ _SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 def _store(request: Request):
     return request.app.state.app_state.memory
+
+
+def _feedback_store(request: Request):
+    return request.app.state.app_state.feedback
 
 
 def _viewer(request: Request):
@@ -101,3 +107,80 @@ async def delete_session(session_id: str, request: Request):
     if not ok:
         return JSONResponse(status_code=404, content={"error": "session not found"})
     return JSONResponse(status_code=204, content=None)
+
+
+# --- 回答反馈（效果闭环：点赞/点踩落库，同值再点取消）---
+
+
+async def _check_message_in_session(request: Request, session_id: str, message_id: int):
+    """消息必须存在于目标会话（不存在或属他会话一律 404，不泄露存在性）。"""
+    owner_session = await _feedback_store(request).message_session(message_id)
+    if owner_session != session_id:
+        return JSONResponse(status_code=404, content={"error": "message not found in session"})
+    return None
+
+
+@router.put("/api/sessions/{session_id}/messages/{message_id}/feedback")
+async def set_message_feedback(session_id: str, message_id: int, request: Request):
+    if not _SESSION_ID_RE.match(session_id):
+        return JSONResponse(status_code=400, content={"error": "invalid sessionId"})
+    forbidden = await _check_owner(request, session_id)
+    if forbidden:
+        return forbidden
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"error": "invalid JSON body"})
+    rating = body.get("rating")
+    if rating not in (1, -1):
+        return JSONResponse(status_code=400, content={"error": "invalid request",
+                                                      "details": {"rating": "must be 1 or -1"}})
+    comment = body.get("comment")
+    if comment is not None:
+        comment = str(comment).strip()[:1000] or None
+    not_found = await _check_message_in_session(request, session_id, message_id)
+    if not_found:
+        return not_found
+    user_id, _ = _viewer(request)
+    await _feedback_store(request).set_feedback(session_id, message_id, rating, user_id, comment)
+    metrics.inc_counter("feedback", rating="up" if rating == 1 else "down")
+    return JSONResponse(content={"messageId": message_id, "rating": rating})
+
+
+@router.delete("/api/sessions/{session_id}/messages/{message_id}/feedback")
+async def clear_message_feedback(session_id: str, message_id: int, request: Request):
+    if not _SESSION_ID_RE.match(session_id):
+        return JSONResponse(status_code=400, content={"error": "invalid sessionId"})
+    forbidden = await _check_owner(request, session_id)
+    if forbidden:
+        return forbidden
+    not_found = await _check_message_in_session(request, session_id, message_id)
+    if not_found:
+        return not_found
+    ok = await _feedback_store(request).clear_feedback(message_id)
+    if not ok:
+        return JSONResponse(status_code=404, content={"error": "feedback not found"})
+    return JSONResponse(status_code=204, content=None)
+
+
+@router.get("/api/admin/feedback")
+async def list_feedback(request: Request, _: None = Depends(require_admin)):
+    """反馈复盘清单（admin）：可按 rating 过滤，用于点踩案例回看与评测集沉淀。"""
+    rating = None
+    rating_param = request.query_params.get("rating")
+    if rating_param is not None:
+        try:
+            rating = int(rating_param)
+        except ValueError:
+            return JSONResponse(status_code=400, content={"error": "invalid rating"})
+        if rating not in (1, -1):
+            return JSONResponse(status_code=400, content={"error": "invalid rating"})
+    limit = 50
+    limit_param = request.query_params.get("limit")
+    if limit_param:
+        try:
+            limit = max(1, min(int(limit_param), 200))
+        except ValueError:
+            return JSONResponse(status_code=400, content={"error": "invalid limit"})
+    items = await _feedback_store(request).list_feedback(rating=rating, limit=limit)
+    return JSONResponse(content={"feedback": items})

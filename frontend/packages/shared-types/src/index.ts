@@ -37,4 +37,6 @@ export interface AgentRunResult {
   toolCalls: AgentToolCall[];
   durationMs: number;
   error?: string;
+  /** 落库后的消息 id（反馈定位用；未落库时缺省）。 */
+  messageId?: number;
 }

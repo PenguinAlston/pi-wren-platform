@@ -38,6 +38,7 @@ class AgentRunResult(BaseModel):
     toolCalls: list[AgentToolCall] = Field(default_factory=list)
     durationMs: int = 0
     error: str | None = None
+    messageId: int | None = None  # 落库后的 ai_chat_message.id（反馈定位用；未落库为 None）
 
 
 # --- Agent listing ---

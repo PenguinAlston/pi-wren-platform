@@ -9,6 +9,8 @@ import ChatResultTable from './components/ChatResultTable';
 import SessionSidebar, { type SessionSummary } from './components/SessionSidebar';
 import { ThinkingStream } from './components/ThinkingStream';
 import { Markdown } from './components/Markdown';
+import { MessageFeedback } from './components/MessageFeedback';
+import type { FeedbackValue } from './components/chat-utils';
 
 interface AgentInfo {
   id: string;
@@ -25,6 +27,9 @@ interface ChatMessageItem {
   events?: AgentEvent[];
   loading?: boolean;
   error?: boolean;
+  /** 落库消息 id（done 帧返回或历史回看带出）；缺失时反馈按钮禁用。 */
+  messageId?: number;
+  feedback?: FeedbackValue;
 }
 
 interface SseFrame {
@@ -179,6 +184,7 @@ export default function ChatPage() {
                 sql: run.sql,
                 data: run.data,
                 events: run.events,
+                messageId: run.messageId,
                 loading: false,
               });
               setActiveSessionId(run.sessionId);
@@ -236,11 +242,13 @@ export default function ChatPage() {
       const body = (await response.json()) as {
         name: string;
         messages: {
+          id?: number;
           question: string;
           answer: string;
           sql?: string;
           data?: Record<string, unknown>[];
           createdAt: string;
+          feedback?: { rating: number; comment: string | null } | null;
         }[];
       };
       const items: ChatMessageItem[] = [];
@@ -252,6 +260,8 @@ export default function ChatPage() {
           content: record.answer,
           sql: record.sql,
           data: record.data,
+          messageId: record.id,
+          feedback: record.feedback?.rating === 1 ? 'up' : record.feedback?.rating === -1 ? 'down' : null,
         });
       }
       setMessages(items);
@@ -300,6 +310,50 @@ export default function ChatPage() {
       // 剪贴板不可用时忽略
     }
   };
+
+  /** 回答反馈：乐观更新 → 提交（next=null 表示取消，走 DELETE）；失败回滚并内联提示。 */
+  const submitFeedback = useCallback(
+    async (targetId: string, messageId: number | undefined, previous: FeedbackValue, next: FeedbackValue) => {
+      patchMessage(targetId, { feedback: next });
+      if (!messageId) {
+        patchMessage(targetId, { feedback: previous });
+        setError('该回答尚未落库，暂不能反馈');
+        return;
+      }
+      if (!activeSessionId) {
+        patchMessage(targetId, { feedback: previous });
+        setError('会话尚未建立，请重试');
+        return;
+      }
+      try {
+        if (next === null) {
+          const response = await apiFetch(
+            `/api/sessions/${encodeURIComponent(activeSessionId)}/messages/${messageId}/feedback`,
+            { method: 'DELETE' },
+          );
+          if (!response.ok && response.status !== 404) {
+            throw new Error(`取消反馈失败（${response.status}）`);
+          }
+        } else {
+          const response = await apiFetch(
+            `/api/sessions/${encodeURIComponent(activeSessionId)}/messages/${messageId}/feedback`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ rating: next === 'up' ? 1 : -1 }),
+            },
+          );
+          if (!response.ok) {
+            throw new Error(`反馈失败（${response.status}）`);
+          }
+        }
+      } catch (err) {
+        patchMessage(targetId, { feedback: previous });
+        setError(err instanceof Error ? err.message : '反馈失败，请稍后重试');
+      }
+    },
+    [activeSessionId, patchMessage],
+  );
 
   const autoGrow = (element: HTMLTextAreaElement) => {
     element.style.height = 'auto';
@@ -411,6 +465,15 @@ export default function ChatPage() {
                         >
                           {copiedId === message.id ? '已复制' : '复制'}
                         </Button>
+                        {!message.error && message.content ? (
+                          <MessageFeedback
+                            rating={message.feedback ?? null}
+                            disabled={!message.messageId}
+                            onRate={(next) =>
+                              void submitFeedback(message.id, message.messageId, message.feedback ?? null, next)
+                            }
+                          />
+                        ) : null}
                       </div>
                     </>
                   ) : null}
