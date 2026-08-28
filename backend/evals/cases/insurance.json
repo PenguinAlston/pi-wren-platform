@@ -1,0 +1,216 @@
+{
+  "version": 1,
+  "description": "保险 Agent NL→SQL 评测回归集。expectedTables 为白名单语义（SQL 触达表必须是其子集）；answerMust 为答案必须命中的关键点（子串判定）；由 run_eval.py 消费。",
+  "cases": [
+    {
+      "id": "policy_status_dist",
+      "category": "保单",
+      "question": "保单状态分布情况如何？",
+      "expectedTables": ["ins_policy_main", "sys_dict"],
+      "answerMust": ["保单"]
+    },
+    {
+      "id": "premium_by_type",
+      "category": "保单",
+      "question": "各险种的保费规模是多少？",
+      "expectedTables": ["ins_policy_main", "sys_dict"],
+      "answerMust": ["保费"]
+    },
+    {
+      "id": "premium_monthly_trend",
+      "category": "保单",
+      "question": "2024年每月的保费收入趋势如何？",
+      "expectedTables": ["ins_policy_main"],
+      "answerMust": ["2024"]
+    },
+    {
+      "id": "avg_premium_by_type",
+      "category": "保单",
+      "question": "各险种的件均保费是多少？",
+      "expectedTables": ["ins_policy_main", "sys_dict"],
+      "answerMust": ["保费"]
+    },
+    {
+      "id": "policy_top10_premium_detail",
+      "category": "保单",
+      "question": "保费最高的10张保单是哪些？请列出保单号和被保人姓名。",
+      "expectedTables": ["ins_policy_main", "ins_customer"],
+      "answerMust": ["保单号", "被保人"]
+    },
+    {
+      "id": "policy_expiry_detail",
+      "category": "保单",
+      "question": "今年到期的保单有哪些？列出保单号、客户姓名和到期日期。",
+      "expectedTables": ["ins_policy_main", "ins_customer"],
+      "answerMust": ["到期"]
+    },
+    {
+      "id": "policy_terminated_detail",
+      "category": "保单",
+      "question": "已终止的保单有哪些？列出保单号、被保人和终止日期。",
+      "expectedTables": ["ins_policy_main", "ins_customer"],
+      "answerMust": ["终止"]
+    },
+    {
+      "id": "policy_by_org",
+      "category": "保单",
+      "question": "各机构的保单数量分布如何？",
+      "expectedTables": ["ins_policy_main", "sys_org"],
+      "answerMust": ["机构"]
+    },
+    {
+      "id": "policy_count_2024",
+      "category": "保单",
+      "question": "2024年一共承保了多少张保单？",
+      "expectedTables": ["ins_policy_main"],
+      "answerMust": ["2024"]
+    },
+    {
+      "id": "terminate_vs_expiry_2025",
+      "category": "保单",
+      "question": "2025年终止和到期的保单分别有多少？",
+      "expectedTables": ["ins_policy_main"],
+      "answerMust": ["终止", "到期"]
+    },
+    {
+      "id": "policy_status_detail_top",
+      "category": "保单",
+      "question": "列出10张有效状态保单的保单号、险种名称和保费。",
+      "expectedTables": ["ins_policy_main", "sys_dict"],
+      "answerMust": ["保单号"]
+    },
+    {
+      "id": "premium_share_by_type",
+      "category": "保单",
+      "question": "保费规模按险种的占比是怎样的？",
+      "expectedTables": ["ins_policy_main", "sys_dict"],
+      "answerMust": ["保费"]
+    },
+    {
+      "id": "claim_status_dist",
+      "category": "理赔",
+      "question": "理赔案件的状态分布如何？",
+      "expectedTables": ["ins_claim_main", "sys_dict"],
+      "answerMust": ["理赔"]
+    },
+    {
+      "id": "claim_ratio_by_type",
+      "category": "理赔",
+      "question": "各险种的赔付率如何？",
+      "expectedTables": ["ins_claim_main", "ins_policy_main", "sys_dict"],
+      "answerMust": ["赔付率"]
+    },
+    {
+      "id": "claim_amount_by_type",
+      "category": "理赔",
+      "question": "各险种已赔付的理赔金额是多少？",
+      "expectedTables": ["ins_claim_main", "ins_policy_main", "sys_dict"],
+      "answerMust": ["金额"]
+    },
+    {
+      "id": "claim_monthly_report_trend",
+      "category": "理赔",
+      "question": "2025年各月的报案数量趋势如何？",
+      "expectedTables": ["ins_claim_main"],
+      "answerMust": ["2025"]
+    },
+    {
+      "id": "claim_top5_amount",
+      "category": "理赔",
+      "question": "赔付金额最高的5起理赔案件是哪些？",
+      "expectedTables": ["ins_claim_main"],
+      "answerMust": ["理赔"]
+    },
+    {
+      "id": "claim_rejected_cases",
+      "category": "理赔",
+      "question": "被拒赔的案件有哪些？列出报案号。",
+      "expectedTables": ["ins_claim_main", "sys_dict"],
+      "answerMust": ["拒赔"]
+    },
+    {
+      "id": "claim_by_org",
+      "category": "理赔",
+      "question": "各机构的理赔案件数量分布如何？",
+      "expectedTables": ["ins_claim_main", "sys_org"],
+      "answerMust": ["机构"]
+    },
+    {
+      "id": "claim_close_ratio",
+      "category": "理赔",
+      "question": "理赔结案率是多少？",
+      "expectedTables": ["ins_claim_main", "sys_dict"],
+      "answerMust": ["结案"]
+    },
+    {
+      "id": "claim_top_customers",
+      "category": "理赔",
+      "question": "理赔次数最多的前5位客户是谁？",
+      "expectedTables": ["ins_claim_main", "ins_policy_main", "ins_customer"],
+      "answerMust": ["客户"]
+    },
+    {
+      "id": "claim_processing_count",
+      "category": "理赔",
+      "question": "目前还未结案的理赔案件有多少？",
+      "expectedTables": ["ins_claim_main", "sys_dict"],
+      "answerMust": ["理赔"]
+    },
+    {
+      "id": "preserve_type_status_dist",
+      "category": "保全",
+      "question": "保全业务的类型和状态分布如何？",
+      "expectedTables": ["ins_preserve_main", "sys_dict"],
+      "answerMust": ["保全"]
+    },
+    {
+      "id": "preserve_recent_count",
+      "category": "保全",
+      "question": "最近30天有多少保全申请？",
+      "expectedTables": ["ins_preserve_main"],
+      "answerMust": ["保全"]
+    },
+    {
+      "id": "preserve_by_org",
+      "category": "保全",
+      "question": "各机构的保全业务量分布如何？",
+      "expectedTables": ["ins_preserve_main", "sys_org"],
+      "answerMust": ["保全"]
+    },
+    {
+      "id": "underwrite_result_dist",
+      "category": "核保",
+      "question": "核保结果的分布情况如何？",
+      "expectedTables": ["ins_policy_underwrite", "sys_dict"],
+      "answerMust": ["核保"]
+    },
+    {
+      "id": "underwrite_rejected_policies",
+      "category": "核保",
+      "question": "核保被拒的保单有哪些？列出保单号。",
+      "expectedTables": ["ins_policy_underwrite", "ins_policy_main"],
+      "answerMust": ["保单"]
+    },
+    {
+      "id": "top_premium_customers",
+      "category": "客户",
+      "question": "保费贡献最高的前10位客户是谁？",
+      "expectedTables": ["ins_policy_main", "ins_customer"],
+      "answerMust": ["客户"]
+    },
+    {
+      "id": "overview_biz_summary",
+      "category": "综合",
+      "question": "整体经营情况概览：保单量、保费规模和理赔案件数。",
+      "expectedTables": ["ins_policy_main", "ins_claim_main", "sys_dict"],
+      "answerMust": ["保费"]
+    },
+    {
+      "id": "premium_by_org_overview",
+      "category": "综合",
+      "question": "各机构的保费和保单量对比情况如何？",
+      "expectedTables": ["ins_policy_main", "sys_org"],
+      "answerMust": ["保费", "保单"]
+    }
+  ]
+}

@@ -166,6 +166,10 @@ pi-wren-platform/
 
 `DbSessionStore`（`session/db_store.py`）：PostgreSQL 两表模型——`ai_chat_session`（会话主表，含 `agent_id` 隔离与 `user_id` 归属）+ `ai_chat_message`（每轮问题/回答/SQL/结果 JSON）。多轮续聊注入最近 3 轮历史；会话列表/重命名/删除经 `/api/sessions*` 管理。
 
+## 效果闭环（评测回归集）
+
+- **评测回归集**（`backend/evals/`）：30 条中文案例（`cases/insurance.json`，expectedTables 白名单 + answerMust 关键点），`python -m evals.run_eval` 真实跑 `DataAnalysisAgent.answer()` 全链路（需 DB/LLM/MDL，不进默认 CI），确定性校验（流水线成功/触达表/行数/关键点）+ 可选 `--judge` LLM 评审（关键点覆盖 + 编造检测），报告落 `evals/reports/`。
+
 ## 引擎池与限流
 
 - **WrenEngine 引擎池**：`WrenEngineService` 与自定义 Agent 的 `_WrenEngineAdapter` 均为 N 引擎轮询（`AI_ENGINE_POOL_SIZE`，默认 4，每引擎一条懒创建的 psycopg 连接），消除单连接串行瓶颈；WrenMemory 只读单实例共享。
@@ -206,7 +210,7 @@ pi-wren-platform/
 
 ## 当前边界与演进方向
 
-**已可用**：自然语言查真实数据库 + 业务分析摘要（保险 Agent）、SSE 流式执行轨迹、PostgreSQL 多轮会话、用户认证 + 会话归属隔离 + 用户管理（`AUTH_ENABLED`）、AI 问答审计、查询行数/超时硬约束、WrenAI strict mode + golden SQL 回归集、WrenEngine 引擎池（内置 + 自定义 Agent）、限流（聊天/登录）、基础指标暴露（`/api/metrics`）、容器化部署物、自定义 Agent 全生命周期（注册/启停/编辑/删除/连接测试/从数据库导入）、传统查询接口。
+**已可用**：自然语言查真实数据库 + 业务分析摘要（保险 Agent）、SSE 流式执行轨迹、PostgreSQL 多轮会话、用户认证 + 会话归属隔离 + 用户管理（`AUTH_ENABLED`）、AI 问答审计、查询行数/超时硬约束、WrenAI strict mode + golden SQL 回归集、WrenEngine 引擎池（内置 + 自定义 Agent）、限流（聊天/登录）、基础指标暴露（`/api/metrics`）、容器化部署物、自定义 Agent 全生命周期（注册/启停/编辑/删除/连接测试/从数据库导入）、传统查询接口、NL→SQL 评测回归集（`backend/evals/`）。
 
 **待加固**（详见 [enterprise-roadmap.md](enterprise-roadmap.md)）：
 

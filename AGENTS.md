@@ -65,6 +65,8 @@
 
 后端：pytest + pytest-asyncio（`asyncio_mode = "auto"`），测试在 `backend/tests/`，命名 `test_*.py`；纯函数测试（`test_result_analysis.py`、`test_db_introspect.py`、`test_sql_validation.py`、`test_crypto.py`、`test_ratelimit.py`、`test_metrics.py`）+ 认证（口令/令牌/中间件/用户管理）+ 会话存储（`test_session_ownership.py`，假池记录 SQL）+ `test_golden_sql.py`（真实 MDL dry_plan 回归集，wrenai 升级防护；本地需先 `wren context build`）。内省组装逻辑用纯函数测（喂固定 rows），DB 查询部分不测（项目无 DB fixture）。
 
+效果评测（非 pytest，需真实 DB/LLM/MDL，在 `backend/` 内执行）：`python -m evals.run_eval [--only <fnmatch>] [--judge]` 跑 NL→SQL 评测回归集（`backend/evals/cases/insurance.json`，30 条中文案例），报告落 `backend/evals/reports/`（已 gitignore）；判定逻辑纯函数测试见 `tests/test_eval_checks.py`。
+
 前端：Vitest（如 `frontend/apps/web` 有 `*.test.ts`）。
 
 ## 提交与 PR 指南
