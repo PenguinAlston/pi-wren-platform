@@ -1,0 +1,20 @@
+{
+  "name": "@pi-wren/pi-orchestrator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@earendil-works/pi-agent-core": "0.83.0",
+    "@earendil-works/pi-ai": "0.83.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.0"
+  }
+}
