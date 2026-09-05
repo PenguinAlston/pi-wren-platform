@@ -20,7 +20,9 @@ from langchain_openai import ChatOpenAI
 from loguru import logger
 
 from app.agents.domain import AgentDomainConfig, SQL_SYSTEM_PROMPT
+from app.auth.org_access import OrgAccess
 from app.models.schemas import AgentEvent, AgentRunResult, AgentToolCall
+from app.semantic.org_scope import enforce_org_access, org_prompt_instructions
 from app.semantic.result_analysis import analyze_query_result
 from app.semantic.result_completeness import (
     build_repair_question,
@@ -62,12 +64,33 @@ class DataAnalysisAgent:
         session_id: str | None = None,
         on_event=None,
         user_id: str | None = None,
+        org_access: OrgAccess | None = None,
+        persist: bool = True,
     ) -> AgentRunResult:
+        """org_access：本次请求的数据访问范围（机构行级权限）。
+
+        None / unrestricted 不干预；deny 且领域含受约束表时直接返回提示（不调 LLM）；
+        org 模式在 SQL 校验后强制 org_code 谓词（缺失/不符触发带提示重试）。
+        persist=False 时跳过会话落库（internal 链路由 Pi 侧存储负责）。
+        """
         started = time.time()
         sid = session_id or str(uuid.uuid4())
         events: list[AgentEvent] = []
         trace: list[str] = []
         tool_calls: list[AgentToolCall] = []
+        org_enforced = bool(org_access and org_access.restricted and self._domain.org_scoped_tables)
+
+        # deny 模式：受约束表的任何查询都不放行，短路返回（省 LLM 调用）
+        if org_access and org_access.mode == "deny" and self._domain.org_scoped_tables:
+            notice = (
+                "当前账号未分配机构，无法查询保单/理赔/保全等机构维度的业务数据。"
+                "请联系管理员在用户管理页分配机构后再试。"
+            )
+            return AgentRunResult(
+                sessionId=sid, answer=notice,
+                trace=[notice], events=[make_event("answer", "数据权限提示", notice)],
+                durationMs=int((time.time() - started) * 1000),
+            )
 
         history = await self._load_history(sid, question)
 
@@ -117,7 +140,8 @@ class DataAnalysisAgent:
                         instructions = await asyncio.to_thread(self._engine.fetch_instructions)
                         # ② LLM 生成 SQL
                         sql_start = time.time()
-                        sql = await self._generate_sql(prompt, ctx_text, instructions, history)
+                        sql = await self._generate_sql(prompt, ctx_text, instructions, history,
+                                                       org_access=org_access)
                         tool_calls.append(AgentToolCall(
                             name="wren_generate_sql", input=prompt, output=sql,
                             durationMs=int((time.time() - sql_start) * 1000), ok=True,
@@ -126,6 +150,13 @@ class DataAnalysisAgent:
 
                         # ③ 本地白名单校验
                         validated = parse_and_validate_sql(sql, self._allowed_tables)
+
+                        # ③' 机构行级权限强制（org 模式缺谓词/值不符 → 报错触发带提示重试）
+                        if org_enforced:
+                            org_err = enforce_org_access(validated, org_access,
+                                                         self._domain.org_scoped_tables)
+                            if org_err:
+                                raise ValueError(org_err)
 
                         # ④ wren dry-run 受治理校验
                         ok, err = await asyncio.to_thread(self._engine.dry_run, validated)
@@ -202,7 +233,7 @@ class DataAnalysisAgent:
 
             # 保存会话（带 domain，便于按 Agent 隔离会话列表；user_id 用于多用户归属）
             message_id: int | None = None
-            if self._memory:
+            if self._memory and persist:
                 message_id = await self._memory.save(sid, question, answer_text, sql, rows,
                                                      agent_id=self._domain.id, user_id=user_id)
 
@@ -221,9 +252,13 @@ class DataAnalysisAgent:
                 durationMs=int((time.time() - started) * 1000), error=detail,
             )
 
-    async def _generate_sql(self, question: str, context: str, instructions: str, history: list) -> str:
-        """LLM 生成 SQL：注入 wren 语义上下文 + 业务规则 + 历史。"""
+    async def _generate_sql(self, question: str, context: str, instructions: str, history: list,
+                            org_access: OrgAccess | None = None) -> str:
+        """LLM 生成 SQL：注入 wren 语义上下文 + 业务规则 + 数据范围约束 + 历史。"""
         user_parts: list[str] = []
+        org_rule = org_prompt_instructions(org_access, self._domain.org_scoped_tables) if org_access else ""
+        if org_rule:
+            user_parts.extend([org_rule, ""])
         if instructions:
             user_parts.extend(["Business rules:", instructions, ""])
         if context:
