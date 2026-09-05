@@ -29,7 +29,8 @@ ENV NEXT_PUBLIC_API_URL=http://backend:8080
 COPY --from=builder /ws/apps/web/.next/standalone ./
 COPY --from=builder /ws/apps/web/.next/static ./apps/web/.next/static
 COPY apps/web/docker-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Windows checkout（CRLF）会让 shebang 失效：加载入时强制 LF
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod +x /entrypoint.sh
 EXPOSE 3000
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "apps/web/server.js"]

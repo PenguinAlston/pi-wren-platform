@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 export function loadConfig(env = process.env) {
   const config = {
     port: Number(env.PI_PORT ?? 8090),
+    // 容器部署需 0.0.0.0（backend 经容器网络访问）；本地开发建议 127.0.0.1
+    bindHost: env.PI_BIND_HOST ?? '0.0.0.0',
     internalToken: env.INTERNAL_API_TOKEN ?? '',
     backendUrl: env.PY_BACKEND_URL ?? 'http://127.0.0.1:8080',
     dataDir: env.PI_DATA_DIR ?? fileURLToPath(new URL('../data/sessions', import.meta.url)),

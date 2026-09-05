@@ -192,7 +192,7 @@ export async function startServer({ config, store, service, listen = true }) {
   const handler = createHandler({ config, store, service });
   const server = createServer(handler);
   if (listen) {
-    await new Promise((resolve) => server.listen(config.port, '127.0.0.1', resolve));
+    await new Promise((resolve) => server.listen(config.port, config.bindHost, resolve));
   }
   return server;
 }
@@ -203,7 +203,7 @@ if (process.argv[1] && process.argv[1].endsWith('server.mjs')) {
   const store = createSessionStore(config.dataDir);
   const { service } = createAppService({ config, store });
   const server = createServer(createHandler({ config, store, service }));
-  server.listen(config.port, '127.0.0.1', () => {
+  server.listen(config.port, config.bindHost, () => {
     console.log(`pi-orchestrator listening on http://127.0.0.1:${config.port}`);
   });
   const shutdown = () => server.close(() => process.exit(0));
