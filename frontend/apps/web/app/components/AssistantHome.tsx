@@ -338,7 +338,7 @@ export default function AssistantHome() {
       <textarea
         ref={textareaRef}
         className="chat-textarea"
-        placeholder="向企业数据提问…（⌘/Ctrl + Enter 发送）"
+        placeholder="向企业数据提问…"
         value={input}
         rows={1}
         autoFocus={floating}

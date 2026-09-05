@@ -505,7 +505,7 @@ export default function ChatPage() {
           <textarea
             ref={textareaRef}
             className="chat-textarea"
-            placeholder={`向${activeLabel}提问…（⌘/Ctrl + Enter 发送）`}
+            placeholder={`向${activeLabel}提问…`}
             value={input}
             rows={1}
             onChange={(e) => {

@@ -2715,9 +2715,12 @@ pre.code,
 
 .home-input-floating:focus-within {
   border-color: var(--pw-primary);
-  box-shadow:
-    0 0 0 3px rgba(25, 180, 157, 0.14),
-    var(--pw-shadow);
+  box-shadow: var(--pw-shadow);
+}
+
+/* 聚焦反馈由卡片边框承担，去掉全局 3px 描边与内嵌阴影（双圈太重） */
+.home-input-floating .chat-textarea:focus-visible {
+  outline: none;
 }
 
 .home-input-floating .chat-textarea {
@@ -2858,7 +2861,40 @@ pre.code,
     height: auto;
   }
   .home-main {
-    height: 70vh;
+    height: calc(100dvh - 300px);
+    min-height: 420px;
+  }
+  .home-layout .chat-sidebar {
+    flex-basis: auto;
+    max-height: 208px;
+  }
+  .home-landing {
+    padding: 0 16px 6vh;
+  }
+  .home-greeting {
+    font-size: 24px;
+  }
+  .home-tagline {
+    font-size: 14px;
+  }
+  .chat-messages {
+    padding: 16px;
+  }
+  .chat-bubble {
+    max-width: 94%;
+    padding: 10px 14px;
+  }
+  .chat-input-bar {
+    padding: 10px 12px;
+  }
+  .chat-textarea {
+    padding: 8px 12px;
+  }
+  /* 窄屏下宽表格横向滚动，不撑破气泡 */
+  .markdown-body table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 }
 
@@ -2870,6 +2906,7 @@ pre.code,
   .doc-layout {
     flex-direction: column;
   }
+  /* 导航栏在窄屏下压成一行横向滚动（品牌 + 菜单项药丸），不再整列堆叠 */
   .doc-aside {
     position: static;
     height: auto;
@@ -2877,14 +2914,54 @@ pre.code,
     width: 100%;
     border-right: 0;
     border-bottom: 1px solid var(--pw-border);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    overflow-x: auto;
+    padding: 10px 16px;
   }
-  .doc-topbar {
-    padding: 0 20px;
+  .doc-brand {
+    margin-bottom: 0;
+    flex: 0 0 auto;
+    padding: 0;
   }
-  .doc-content {
-    padding: 20px 20px 48px;
+  .doc-brand small {
+    display: none;
+  }
+  .doc-menu {
+    display: flex;
+    gap: 4px;
+    align-items: center;
   }
   .doc-menu-group {
-    margin-bottom: var(--pw-space-sm);
+    display: contents;
   }
+  .doc-menu-label {
+    display: none;
+  }
+  .doc-menu-item {
+    white-space: nowrap;
+    padding: 6px 12px;
+    margin-bottom: 0;
+  }
+  .doc-topbar {
+    padding: 0 16px;
+  }
+  .doc-content {
+    padding: 16px 16px 40px;
+  }
+  .topbar-clock {
+    display: none;
+  }
+}
+
+/* 细滚动条（横向导航等） */
+.doc-aside::-webkit-scrollbar {
+  height: 4px;
+}
+
+.doc-aside::-webkit-scrollbar-thumb {
+  background: var(--pw-border-strong);
+  border-radius: 999px;
 }
