@@ -1,10 +1,13 @@
 """领域配置（对应 TS agents/domain.py）。
 
 一个 Agent = 通用 LangGraph 循环 + 领域配置（system prompt + 语义工程）。
+org_scoped_tables：受机构行级权限约束的业务表（空 = 无机构维度，如自定义 Agent）。
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from app.semantic.org_scope import ORG_SCOPED_TABLES
 
 
 @dataclass
@@ -13,6 +16,7 @@ class AgentDomainConfig:
     label: str
     description: str
     system_prompt: str
+    org_scoped_tables: tuple[str, ...] = field(default=())
 
 
 INSURANCE_SYSTEM_PROMPT = (
@@ -49,6 +53,7 @@ insurance_domain = AgentDomainConfig(
     label="保险综合查询",
     description="查询保单、理赔、赔付率、保费规模等保险业务数据",
     system_prompt=INSURANCE_SYSTEM_PROMPT,
+    org_scoped_tables=ORG_SCOPED_TABLES,
 )
 
 

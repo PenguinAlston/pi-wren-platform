@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { Button, Input, Modal } from 'animal-island-ui';
+import { Button, Input, Modal } from '../components/ui';
 import { apiFetch } from '../lib/api';
 
 interface UserView {
@@ -10,11 +10,20 @@ interface UserView {
   displayName: string;
   role: string;
   status: string;
+  orgId?: string | null;
+}
+
+interface OrgOption {
+  org_id: string;
+  org_name: string;
+  org_level: number;
 }
 
 const TOKEN_KEY = 'piwren_admin_token';
 
-/** 用户管理（仅 admin）：创建/角色/启停/重置口令。鉴权 = 登录会话（admin）或 X-Admin-Token。 */
+const ORG_SELECT_STYLE = { padding: '4px 8px', border: '1px solid #cdd5e1', borderRadius: 6 };
+
+/** 用户管理（仅 admin）：创建/角色/启停/重置口令/机构分配。鉴权 = 登录会话（admin）或 X-Admin-Token。 */
 export default function UsersPage() {
   return (
     <Suspense fallback={null}>
@@ -26,13 +35,29 @@ export default function UsersPage() {
 function UsersInner() {
   const [token, setToken] = useState('');
   const [users, setUsers] = useState<UserView[]>([]);
+  const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState({ username: '', password: '', displayName: '', role: 'user' });
+  const [form, setForm] = useState({ username: '', password: '', displayName: '', role: 'user', orgId: '' });
   const [resetTarget, setResetTarget] = useState<UserView | null>(null);
   const [newPassword, setNewPassword] = useState('');
+
+  const loadOrgs = useCallback(async () => {
+    try {
+      const headers: Record<string, string> = {};
+      const saved = localStorage.getItem(TOKEN_KEY);
+      if (saved) headers['x-admin-token'] = saved;
+      const response = await apiFetch('/api/orgs', { headers });
+      if (response.ok) {
+        const body = (await response.json()) as { orgs: OrgOption[] };
+        setOrgs(body.orgs ?? []);
+      }
+    } catch {
+      // 机构列表拉取失败不阻塞页面（下拉显示为空）
+    }
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem(TOKEN_KEY);
@@ -41,6 +66,7 @@ function UsersInner() {
     }
     // 未存 token 也先试一次（AUTH_ENABLED 时 admin 会话可直接过）
     void refresh('');
+    void loadOrgs();
   }, []);
 
   const api = useCallback(
@@ -98,10 +124,11 @@ function UsersInner() {
           password: form.password,
           displayName: form.displayName.trim() || undefined,
           role: form.role,
+          orgId: form.orgId || undefined,
         }),
       });
       setMessage({ kind: 'ok', text: `用户 ${form.username.trim()} 已创建` });
-      setForm({ username: '', password: '', displayName: '', role: 'user' });
+      setForm({ username: '', password: '', displayName: '', role: 'user', orgId: '' });
       setCreateOpen(false);
       await refresh();
     } catch (err) {
@@ -134,6 +161,20 @@ function UsersInner() {
     }
   }
 
+  /** 机构分配（空值 = 取消分配）；未分配机构的普通用户无法查询机构维度业务数据。 */
+  async function changeOrg(user: UserView, orgId: string) {
+    try {
+      await api(`/admin/users/${encodeURIComponent(user.userId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ orgId }),
+      });
+      setMessage({ kind: 'ok', text: orgId ? `已分配 ${user.username} 至机构` : `已取消 ${user.username} 的机构归属` });
+      await refresh();
+    } catch (err) {
+      setMessage({ kind: 'err', text: err instanceof Error ? err.message : '操作失败' });
+    }
+  }
+
   async function resetPassword() {
     if (!resetTarget) return;
     try {
@@ -153,12 +194,12 @@ function UsersInner() {
     <main className="container">
       <div className="page-head">
         <h1>用户管理</h1>
-        <span className="meta">登录账号 · 角色 · 启停 · 口令重置（全部操作审计）</span>
+        <span className="meta">登录账号 · 角色 · 机构分配 · 启停 · 口令重置（全部操作审计）</span>
       </div>
 
       {message?.kind === 'err' ? <div className="error-banner">{message.text}</div> : null}
       {message?.kind === 'ok' ? (
-        <div className="error-banner" style={{ color: '#3e7d4f' }}>
+        <div className="error-banner" style={{ color: '#23804a' }}>
           {message.text}
         </div>
       ) : null}
@@ -193,6 +234,7 @@ function UsersInner() {
               <th>用户名</th>
               <th>显示名</th>
               <th>角色</th>
+              <th>所属机构</th>
               <th>状态</th>
               <th>操作</th>
             </tr>
@@ -206,10 +248,24 @@ function UsersInner() {
                   <select
                     value={u.role}
                     onChange={(e) => void changeRole(u, e.target.value)}
-                    style={{ padding: '4px 8px', border: '1px solid #d9c8a9', borderRadius: 6 }}
+                    style={ORG_SELECT_STYLE}
                   >
                     <option value="user">user</option>
                     <option value="admin">admin</option>
+                  </select>
+                </td>
+                <td>
+                  <select
+                    value={u.orgId ?? ''}
+                    onChange={(e) => void changeOrg(u, e.target.value)}
+                    style={ORG_SELECT_STYLE}
+                  >
+                    <option value="">未分配</option>
+                    {orgs.map((org) => (
+                      <option key={org.org_id} value={org.org_id}>
+                        {org.org_name}（{org.org_id}）
+                      </option>
+                    ))}
                   </select>
                 </td>
                 <td>
@@ -236,7 +292,7 @@ function UsersInner() {
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={5} style={{ textAlign: 'center', color: '#a08356' }}>
+                <td colSpan={6} style={{ textAlign: 'center', color: '#8b96ab' }}>
                   暂无数据（未启用认证时可先在 .env 配置 AUTH_ENABLED=true 并重启后端）
                 </td>
               </tr>
@@ -271,10 +327,22 @@ function UsersInner() {
           <select
             value={form.role}
             onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
-            style={{ padding: '8px', border: '1px solid #d9c8a9', borderRadius: 6 }}
+            style={{ padding: '8px', border: '1px solid #cdd5e1', borderRadius: 6 }}
           >
             <option value="user">user（普通用户）</option>
             <option value="admin">admin（管理员）</option>
+          </select>
+          <select
+            value={form.orgId}
+            onChange={(e) => setForm((p) => ({ ...p, orgId: e.target.value }))}
+            style={{ padding: '8px', border: '1px solid #cdd5e1', borderRadius: 6 }}
+          >
+            <option value="">所属机构（可选，未分配则无法查询业务数据）</option>
+            {orgs.map((org) => (
+              <option key={org.org_id} value={org.org_id}>
+                {org.org_name}（{org.org_id}）
+              </option>
+            ))}
           </select>
         </div>
       </Modal>

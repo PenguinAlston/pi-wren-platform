@@ -35,7 +35,7 @@ def test_admin_surface_methods_exist_on_real_store():
     """管理面路由用到的方法，真实 UserStore 必须全部实现（接口对齐护栏）。"""
     store = UserStore(FakePool())
     for method in ("list_users", "find_by_user_id_uncached", "update_user",
-                   "set_password", "count_active_admins"):
+                   "set_password", "count_active_admins", "set_org", "org_exists"):
         assert callable(getattr(store, method)), f"UserStore 缺少管理面方法: {method}"
 
 

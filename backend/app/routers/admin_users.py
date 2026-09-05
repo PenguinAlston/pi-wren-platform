@@ -18,6 +18,7 @@ router = APIRouter()
 
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{2,64}$")
 _MIN_PASSWORD_LEN = 8
+_ORG_UNSET = object()  # update 请求未携带 orgId 键（区分"取消分配"）
 
 
 def _users_or_disabled(request: Request) -> JSONResponse | None:
@@ -29,7 +30,8 @@ def _users_or_disabled(request: Request) -> JSONResponse | None:
 
 def _public(user) -> dict:
     return {"userId": user.user_id, "username": user.username,
-            "displayName": user.display_name, "role": user.role, "status": user.status}
+            "displayName": user.display_name, "role": user.role, "status": user.status,
+            "orgId": user.org_id}
 
 
 @router.get("/api/admin/users")
@@ -54,6 +56,7 @@ async def create_user(request: Request):
     password = body.get("password") or ""
     role = body.get("role") or "user"
     display_name = (body.get("displayName") or "").strip() or None
+    org_id = (body.get("orgId") or "").strip() or None
 
     if not _USERNAME_RE.match(username):
         return JSONResponse(status_code=400, content={"error": "username 需为 2-64 位字母/数字/_.-"})
@@ -61,14 +64,18 @@ async def create_user(request: Request):
         return JSONResponse(status_code=400, content={"error": f"password 至少 {_MIN_PASSWORD_LEN} 位"})
     if role not in ("admin", "user"):
         return JSONResponse(status_code=400, content={"error": "role 仅支持 admin | user"})
+    if org_id and not await state.users.org_exists(org_id):
+        return JSONResponse(status_code=400, content={"error": f"机构不存在: {org_id}"})
 
     if await state.users.find_by_username(username):
         return JSONResponse(status_code=409, content={"error": f"username 已存在: {username}"})
-    user = await state.users.create_user(username, password, role=role, display_name=display_name)
+    user = await state.users.create_user(username, password, role=role, display_name=display_name,
+                                         org_id=org_id)
     actor = getattr(request.state, "user", None)
-    logger.info("创建用户: {} role={} by {}", username, role, actor.username if actor else "token")
+    logger.info("创建用户: {} role={} org={} by {}", username, role, org_id or "-",
+                actor.username if actor else "token")
     if state.audit:
-        await state.audit.log("USER_CREATE", f"创建用户 {username}（role={role}）",
+        await state.audit.log("USER_CREATE", f"创建用户 {username}（role={role}, org={org_id or '未分配'}）",
                               user_id=actor.user_id if actor else None,
                               ip_address=request.client.host if request.client else None)
     return JSONResponse(content={"user": _public(user)}, status_code=201)
@@ -93,6 +100,12 @@ async def update_user(user_id: str, request: Request):
         return JSONResponse(status_code=400, content={"error": "role 仅支持 admin | user"})
     if status is not None and status not in ("active", "disabled"):
         return JSONResponse(status_code=400, content={"error": "status 仅支持 active | disabled"})
+    # orgId 键出现即视为一次机构分配（空串/None = 取消分配）
+    org_update: str | None | object = _ORG_UNSET
+    if "orgId" in body:
+        org_update = (body.get("orgId") or "").strip() or None
+        if isinstance(org_update, str) and not await state.users.org_exists(org_update):
+            return JSONResponse(status_code=400, content={"error": f"机构不存在: {org_update}"})
 
     actor = getattr(request.state, "user", None)
     is_self = actor is not None and actor.user_id == user_id
@@ -107,11 +120,14 @@ async def update_user(user_id: str, request: Request):
         return JSONResponse(status_code=400, content={"error": "系统至少需要保留一个活跃的 admin"})
 
     await state.users.update_user(user_id, role=role, status=status, display_name=display_name)
+    if org_update is not _ORG_UNSET:
+        await state.users.set_org(user_id, org_update)  # type: ignore[arg-type]
     updated = await state.users.find_by_user_id_uncached(user_id)
     logger.info("更新用户: {} role={} status={} by {}", user_id, role, status,
                 actor.username if actor else "token")
     if state.audit:
-        await state.audit.log("USER_UPDATE", f"更新用户 {target.username}（role={role}, status={status}）",
+        org_note = "" if org_update is _ORG_UNSET else f", org={org_update or '取消分配'}"
+        await state.audit.log("USER_UPDATE", f"更新用户 {target.username}（role={role}, status={status}{org_note}）",
                               user_id=actor.user_id if actor else None,
                               ip_address=request.client.host if request.client else None)
     return JSONResponse(content={"user": _public(updated)})

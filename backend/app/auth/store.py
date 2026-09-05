@@ -25,6 +25,7 @@ class AuthUser:
     display_name: str
     role: str  # admin | user
     status: str  # active | disabled
+    org_id: str | None = None  # 所属机构（行级数据权限；admin/None = 不限）
 
 
 class UserStore:
@@ -43,10 +44,13 @@ class UserStore:
                     display_name  varchar(128),
                     role          varchar(16) NOT NULL DEFAULT 'user',
                     status        varchar(16) NOT NULL DEFAULT 'active',
+                    org_id        varchar(64),
                     created_at    timestamp DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            # 存量库补列（agent_config.sql 同款伪迁移；机构行级权限，阶段 2）
+            await conn.execute("ALTER TABLE sys_login_user ADD COLUMN IF NOT EXISTS org_id varchar(64)")
 
     async def bootstrap_admin(self, username: str, password: str | None) -> None:
         """用户表为空时创建初始管理员。为空且未配置口令 → 报错退出（避免弱默认口令）。"""
@@ -65,23 +69,25 @@ class UserStore:
         return f"U{secrets.token_hex(8)}"
 
     async def create_user(self, username: str, password: str, *,
-                          role: str = "user", display_name: str | None = None) -> AuthUser:
+                          role: str = "user", display_name: str | None = None,
+                          org_id: str | None = None) -> AuthUser:
         user_id = self._new_user_id()
         async with self._pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO sys_login_user (user_id, username, password_hash, display_name, role, status)
-                VALUES ($1, $2, $3, $4, $5, 'active')
+                INSERT INTO sys_login_user (user_id, username, password_hash, display_name, role, status, org_id)
+                VALUES ($1, $2, $3, $4, $5, 'active', $6)
                 """,
-                user_id, username, hash_password(password), display_name or username, role,
+                user_id, username, hash_password(password), display_name or username, role, org_id,
             )
         return AuthUser(user_id=user_id, username=username,
-                        display_name=display_name or username, role=role, status="active")
+                        display_name=display_name or username, role=role, status="active",
+                        org_id=org_id)
 
     async def find_by_username(self, username: str) -> AuthUser | None:
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT user_id, username, display_name, role, status "
+                "SELECT user_id, username, display_name, role, status, org_id "
                 "FROM sys_login_user WHERE username = $1", username,
             )
         return self._to_user(row)
@@ -102,7 +108,7 @@ class UserStore:
             return cached[1]
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT user_id, username, display_name, role, status "
+                "SELECT user_id, username, display_name, role, status, org_id "
                 "FROM sys_login_user WHERE user_id = $1", user_id,
             )
         user = self._to_user(row)
@@ -119,10 +125,25 @@ class UserStore:
     async def list_users(self) -> list[AuthUser]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT user_id, username, display_name, role, status "
+                "SELECT user_id, username, display_name, role, status, org_id "
                 "FROM sys_login_user ORDER BY created_at, user_id"
             )
         return [u for u in (self._to_user(r) for r in rows) if u]
+
+    async def set_org(self, user_id: str, org_id: str | None) -> None:
+        """分配/取消机构归属（org_id=None = 取消分配），缓存失效立即生效。"""
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                "UPDATE sys_login_user SET org_id = $1 WHERE user_id = $2", org_id, user_id,
+            )
+        self._cache.pop(user_id, None)
+
+    async def org_exists(self, org_id: str) -> bool:
+        """机构编码是否存在于 sys_org（分配前校验）。"""
+        async with self._pool.acquire() as conn:
+            return bool(await conn.fetchval(
+                "SELECT 1 FROM sys_org WHERE org_id = $1", org_id,
+            ))
 
     async def update_user(self, user_id: str, *,
                           role: str | None = None, status: str | None = None,
@@ -159,4 +180,5 @@ class UserStore:
             user_id=row["user_id"], username=row["username"],
             display_name=row["display_name"] or row["username"],
             role=row["role"], status=row["status"],
+            org_id=row.get("org_id"),
         )

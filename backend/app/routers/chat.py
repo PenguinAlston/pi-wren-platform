@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
+from app.auth.org_access import OrgAccess
 from app.deps import AppState
 from app.metrics import metrics
 from app.models.schemas import ChatRequest
@@ -105,7 +106,8 @@ async def _chat(state: AppState, domain: str, body: dict, request: Request) -> J
     import time as _time
 
     started = _time.monotonic()
-    result = await spec.agent.answer(req.message, session_id=req.sessionId, user_id=user_id)
+    result = await spec.agent.answer(req.message, session_id=req.sessionId, user_id=user_id,
+                                     org_access=OrgAccess.for_user(user))
     metrics.observe("chat_duration", (_time.monotonic() - started) * 1000)
     metrics.inc_counter("chat", agent=domain, status="error" if result.error else "ok")
     await _audit_chat(state, user_id, request, req.message, result)
@@ -169,7 +171,8 @@ async def chat_stream(domain: str, request: Request):
         # 后台跑 Agent，事件通过 on_event 实时入队
         task = _asyncio.create_task(
             spec.agent.answer(req.message, session_id=req.sessionId,
-                               on_event=on_event, user_id=user_id)
+                               on_event=on_event, user_id=user_id,
+                               org_access=OrgAccess.for_user(user))
         )
 
         # 客户端断开（GeneratorExit/CancelledError）时取消后台任务，避免空跑烧 LLM token

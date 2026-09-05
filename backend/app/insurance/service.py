@@ -171,6 +171,7 @@ def build_preserve_query(cond: dict, page: int, page_size: int, sort_by=None, so
     b.like("c.customer_name", cond.get("applicantName"))
     b.gte("m.apply_time", cond.get("applyTimeFrom"), "timestamp")
     b.lte("m.apply_time", cond.get("applyTimeTo"), "timestamp")
+    b.eq("m.org_code", cond.get("orgCode"))
     return b.build(PRESERVE_SELECT, "m.apply_time DESC", page, page_size, sort_by, sort_order, PRESERVE_SORT_COLUMNS)
 
 
@@ -184,12 +185,14 @@ SELECT c.claim_id, c.policy_id, p.policy_no,
        c.claim_status, cs.dict_label AS claim_status_label,
        c.insured_id, i.customer_name AS insured_name, i.id_no AS insured_id_no,
        c.accident_time, c.report_time, c.accident_area,
-       c.apply_claim_amount, c.actual_claim_amount, c.close_time, c.claim_reason
+       c.apply_claim_amount, c.actual_claim_amount, c.close_time, c.claim_reason,
+       c.org_code, o.org_name
 FROM ins_claim_main c
 LEFT JOIN ins_policy_main p ON p.policy_id = c.policy_id
 LEFT JOIN sys_dict ct ON ct.dict_type = 'claim_type' AND ct.dict_value = c.claim_type
 LEFT JOIN sys_dict cs ON cs.dict_type = 'claim_status' AND cs.dict_value = c.claim_status
 LEFT JOIN ins_customer i ON i.customer_id = c.insured_id
+LEFT JOIN sys_org o ON o.org_id = c.org_code
 """
 
 CLAIM_SORT_COLUMNS = {
@@ -212,6 +215,7 @@ def build_claim_query(cond: dict, page: int, page_size: int, sort_by=None, sort_
     b.like("c.accident_area", cond.get("accidentArea"))
     b.gte("c.actual_claim_amount", cond.get("claimAmountMin"), "numeric")
     b.lte("c.actual_claim_amount", cond.get("claimAmountMax"), "numeric")
+    b.eq("c.org_code", cond.get("orgCode"))
     return b.build(CLAIM_SELECT, "c.report_time DESC", page, page_size, sort_by, sort_order, CLAIM_SORT_COLUMNS)
 
 
@@ -371,6 +375,7 @@ class InsuranceQueryService:
         b.eq("p.policy_status", cond.get("policyStatus"))
         b.like("c.customer_name", cond.get("applicantName"))
         b.like("i.customer_name", cond.get("insuredName"))
+        b.eq("p.org_code", cond.get("orgCode"))
         where = f"WHERE {' AND '.join(b.clauses)}" if b.clauses else ""
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(

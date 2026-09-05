@@ -11,6 +11,7 @@ from app.routers import admin_users
 class FakeUserStore:
     def __init__(self, users: dict[str, AuthUser]):
         self.users = users  # user_id -> AuthUser
+        self.existing_orgs = {"ORG-BJ", "ORG-SH"}
 
     async def list_users(self):
         return list(self.users.values())
@@ -21,10 +22,10 @@ class FakeUserStore:
     async def find_by_user_id_uncached(self, user_id):
         return self.users.get(user_id)
 
-    async def create_user(self, username, password, *, role="user", display_name=None):
+    async def create_user(self, username, password, *, role="user", display_name=None, org_id=None):
         uid = f"U-{username}"
-        user = AuthUser(user_id=uid, username=username,
-                        display_name=display_name or username, role=role, status="active")
+        user = AuthUser(user_id=uid, username=username, display_name=display_name or username,
+                        role=role, status="active", org_id=org_id)
         self.users[uid] = user
         return user
 
@@ -32,6 +33,14 @@ class FakeUserStore:
         u = self.users[user_id]
         self.users[user_id] = AuthUser(u.user_id, u.username,
                                        display_name or u.display_name, role or u.role, status or u.status)
+
+    async def set_org(self, user_id, org_id):
+        u = self.users[user_id]
+        self.users[user_id] = AuthUser(u.user_id, u.username, u.display_name, u.role, u.status,
+                                       org_id=org_id)
+
+    async def org_exists(self, org_id):
+        return org_id in self.existing_orgs
 
     async def set_password(self, user_id, password):
         pass
@@ -155,3 +164,29 @@ def test_reset_password_flow():
     assert client.put("/api/admin/users/U-alice/password", json={"password": "short"}).status_code == 400
     assert client.put("/api/admin/users/U-alice/password", json={"password": "new-pass-123"}).status_code == 200
     assert client.put("/api/admin/users/U-none/password", json={"password": "new-pass-123"}).status_code == 404
+
+
+def test_create_user_with_org_and_invalid_org_rejected():
+    app, store, _ = _build_app({"U-admin": ADMIN}, current=ADMIN)
+    client = TestClient(app)
+    r = client.post("/api/admin/users", json={"username": "carol", "password": "12345678", "orgId": "ORG-BJ"})
+    assert r.status_code == 201 and r.json()["user"]["orgId"] == "ORG-BJ"
+    r = client.post("/api/admin/users", json={"username": "dave", "password": "12345678", "orgId": "ORG-XX"})
+    assert r.status_code == 400 and "机构不存在" in r.json()["error"]
+
+
+def test_update_org_assignment_and_clear():
+    app, store, _ = _build_app({"U-admin": ADMIN, "U-alice": ALICE}, current=ADMIN)
+    client = TestClient(app)
+    # 分配
+    r = client.put("/api/admin/users/U-alice", json={"orgId": "ORG-BJ"})
+    assert r.status_code == 200 and store.users["U-alice"].org_id == "ORG-BJ"
+    # 空串 = 取消分配
+    r = client.put("/api/admin/users/U-alice", json={"orgId": ""})
+    assert r.status_code == 200 and store.users["U-alice"].org_id is None
+    # 不存在机构
+    r = client.put("/api/admin/users/U-alice", json={"orgId": "ORG-XX"})
+    assert r.status_code == 400 and "机构不存在" in r.json()["error"]
+    # 未携带 orgId 键 = 不动机构字段
+    r = client.put("/api/admin/users/U-alice", json={"status": "active"})
+    assert r.status_code == 200 and store.users["U-alice"].org_id is None
