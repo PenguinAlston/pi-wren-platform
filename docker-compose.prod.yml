@@ -1,0 +1,81 @@
+# 生产部署编排：docker compose -f docker-compose.prod.yml up -d --build
+#
+# 前置：
+#   1. 仓库根准备 .env（参考 .env.example；生产务必 AUTH_ENABLED=true 等安全配置）
+#   2. semantic/wren 已执行 wren context build && wren memory index（只读挂载进容器）
+#   3. 首库初始化由 infra/postgres 自动执行；存量库由后端启动时自愈补表
+#
+# 说明：
+#   - 外部已有 PostgreSQL 时可去掉 postgres 服务并把 DB_HOST 指向外部实例
+#   - 后端直连库（AI 查询/传统查询）与业务库为同一实例；NODE_ENV=production 时登录 Cookie 加 Secure，
+#     需要 TLS（浏览器仅经 https 访问时设置；纯内网 http 部署保持默认 development 即可）
+
+name: pi-wren-prod
+
+services:
+  postgres:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:18.4-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-demo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-demo}
+      POSTGRES_DB: ${DB_NAME:-piwren}
+    volumes:
+      # postgres 18+ 要求挂载在 /var/lib/postgresql（PGDATA 自动落到 18/docker 子目录）
+      - pgdata:/var/lib/postgresql
+      - ./infra/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-demo} -d ${DB_NAME:-piwren}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      # 首次初始化要跑完 infra/postgres 全部建表+种子脚本，给足宽限
+      start_period: 180s
+    restart: unless-stopped
+
+  redis:
+    image: docker.1ms.run/library/redis:8.4.0
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        # 国内构建换源：PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+        #（基础镜像若需走镜像站：PYTHON_IMAGE=docker.1ms.run/library/python:3.13.10-slim）
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+    env_file: .env
+    environment:
+      # 容器网络内经服务名连库（.env 里的 localhost 不适用于容器）
+      DB_HOST: postgres
+      WREN_PROJECT_DIR: /semantic/wren
+    volumes:
+      - ./semantic:/semantic:ro
+    ports:
+      - '8080:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: apps/web/Dockerfile
+      # 基础镜像若需走镜像站：NODE_IMAGE=docker.1ms.run/library/node:22-alpine
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8080
+    ports:
+      - '3000:3000'
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  pgdata:

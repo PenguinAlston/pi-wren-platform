@@ -1,60 +1,75 @@
 # 仓库指南
 
-`pi-wren-platform` 贡献者指南：一个用 LLM 生成 SQL、对真实数据库进行自然语言业务问答的企业级 Agent 平台（融合 Pi Agent Runtime 执行层与 Wren 风格语义上下文层，并支持新版 WrenAI `wrenai` CLI 作为可选的受治理语义层）。
+`pi-wren-platform` 贡献者指南：一个用 LLM 生成 SQL、对真实数据库进行自然语言业务问答的企业级 Agent 平台。融合 WrenAI（受治理语义上下文层）与 LangChain/LangGraph 编排，语义层完全基于 WrenAI 原生工程。
 
 ## 项目结构与模块划分
 
-pnpm workspace 单仓（`pnpm-workspace.yaml`），全 TypeScript。每个 workspace 各司其职：
+混合技术栈单仓：**后端为 Python（`backend/`，FastAPI），前端为 TypeScript（`frontend/`，pnpm workspace：`apps/web` Next.js + `packages/shared-types`）**，前后端各自独立成目录。
 
-- `apps/api` — Express API：zod 配置校验、pino 日志、健康检查、`/api/agents`、`/api/agent/:domain/chat`、`/api/agent/:domain/chat/stream`（SSE 流式，`src/routes/`）
-- `apps/web` — Next.js 聊天控制台（`app/chat/`）+ 自定义 Agent 管理页（`app/agents/`）：MDL 粘贴、连接测试、注册/启停/编辑/删除、池监控
-- `services/agent-runtime` — Agent 执行：计划、工具注册、事件、记忆、领域驱动的 `DataAnalysisAgent`（`src/agents/`，支持 `sessionId` 续聊 + `onEvent` 流式回调）；LLM 动态 SQL 生成与安全校验（`src/context/`，含新版 Wren CLI 受治理引擎 `wren-cli-context-engine.ts`）
-- `services/pi-bridge` — 开源 Pi 会话层（方案 A）：基于 `@earendil-works/pi-agent-core` 的 jsonl 多轮会话持久化（`PiSessionStore`）、压缩决策、SSE 事件协议（`src/`）
-- `services/agent-registry` — 自定义 Agent 注册表：`sys_agent_config` 持久化、连接串 AES-256-GCM 加密（`crypto.ts`）、运行时动态加载/更新/注销与错误隔离（`registry.ts`、`store.ts`）
-- `services/context-engine` — 语义层：旧版 Wren AI HTTP 客户端（`src/wren/client.ts`）、新版 `wrenai` CLI 子进程适配器（`src/wren/cli.ts`）、MDL 式配置驱动引擎（`src/mdl/`）；`scripts/generate-wren-project.ts` — 从 `semantic/*.mdl.yml` 生成 Wren 语义项目
-- `services/data-engine` — PostgreSQL 连接池与 SQL 执行器（`src/`）
-- `packages/agent-sdk` — LLM Provider（OpenAI 兼容 / Anthropic / Ollama / Mock）（`src/providers/`）
-- `packages/shared-types` — 跨服务共享类型（`src/index.ts`）
-- `semantic/` — 语义配置：`insurance.mdl.yml`（自研 MDL 式：模型/意图/指标/知识）；`semantic/wren/` — 由生成器产出的 Wren v5 语义项目（`models/` + `relationships.yml` + `knowledge/{rules,sql}/`，`target/` 与 `.wren/` 已 gitignore）
-- `scripts/wren-e2e-check.ts` — 端到端验证脚本：真实 wren CLI + 真实保险库 + 真实 LLM 走 `WrenCliContextEngine`
-- `infra/postgres` — 建表与种子数据（`insurance_schema.sql`、`insurance_seed.sql`、`agent_config.sql` 自定义 Agent 表、`z_admin_seed.sql` 审计主体）；`examples/mdl-template.yml` — 自定义 Agent 模板；`docs` — 架构与路线图
+- `backend/` — Python 后端（FastAPI + WrenAI 进程内 SDK + LangChain/LangGraph）：健康检查、`/api/agents`、`/api/agent/{domain}/chat`、`/api/agent/{domain}/chat/stream`（SSE 流式）、自定义 Agent 管理（`app/routers/`）、语义层（`app/semantic/`）、注册表/加密/审计/自定义 Agent 工厂（`app/registry/`）、用户认证（`app/auth/`）、限流（`app/ratelimit.py`）、指标（`app/metrics.py`）、数据层（`app/data/db.py`，asyncpg）
+- `frontend/apps/web` — Next.js 聊天控制台（`app/chat/`）+ 自定义 Agent 管理页（`app/agents/`）：WrenAI 工程 JSON 粘贴、连接测试、注册/启停/编辑/删除、池监控；通过 `next.config.ts` 把 `/api/*` 代理到 `:8080` 后端
+- `frontend/packages/shared-types` — 前端共享类型（`src/index.ts`）；后端不消费
+- `semantic/wren/` — WrenAI 原生语义工程（schema_version 5）：`wren_project.yml` + `models/*/metadata.yml` + `relationships.yml` + `knowledge/{rules,sql}/`（单一语义源）
+- `infra/postgres` — 建表与种子数据（`insurance_schema.sql`、`insurance_seed.sql`、`agent_config.sql` 自定义 Agent 表、`z_admin_seed.sql` 审计主体）；`examples/wren-project-template.json` — 自定义 Agent 工程模板；`docs` — 架构与路线图
 
-各部分如何协作：**新增一个 Agent = 新增一段领域配置（`src/agents/domain.ts`）+ 一份语义 YAML（内置），或通过管理 API/前端页面上传 MDL + 数据库连接串（自定义，`services/agent-registry`），流水线代码零改动**。所有业务依赖均通过构造函数注入，便于测试替换替身。
+各部分如何协作：**新增一个内置 Agent = 在 `backend/app/agents/domain.py` 加一段领域配置 + 一份 WrenAI 工程（`semantic/wren/`）；新增一个自定义 Agent = 通过管理页/API 上传 WrenAI 工程 JSON + 数据库连接串（`backend/app/registry/` 持久化加密），或直接点"从数据库导入"由内省自动生成工程 JSON，流水线代码零改动**。
 
-## Wren 接入（可选，显式开启）
+## 语义层：WrenAI 原生工程（唯一源）
 
-新版 WrenAI（2026-05 起，Rust `wren-core` + Python CLI `wrenai`）不再提供旧版 `/v1/generate_sql` HTTP 接口，而是"语义上下文 + 受治理执行"层：
+平台完全拥抱 WrenAI，语义层只有一种格式——WrenAI 原生工程（`semantic/wren/`）。问答链路（Python 后端实现）：
 
-- `WrenCli`（`services/context-engine/src/wren/cli.ts`）— 子进程适配器，execFile 数组参数（不经 shell）：`memory fetch -q`（语义检索）、`context instructions`（业务规则）、`dry-run --sql`（受治理校验）、`--sql --output json`（受治理执行）
-- `WrenCliContextEngine`（`services/agent-runtime/src/context/wren-cli-context-engine.ts`）— 把 Wren 语义上下文注入 LLM prompt → 生成 SQL → `wren dry-run` 校验 → 失败降级确定性规则引擎
-- 启用条件：`.env` 配置 `WREN_BIN`（如 `wren`）且 Wren 项目就绪（`WREN_PROJECT_DIR`，默认解析 `semantic/wren`）；旧版 `WREN_URL` 路径保持兼容
-- 服务器部署需：`pip install 'wrenai[postgres,memory]'`（国内源 `-i https://pypi.tuna.tsinghua.edu.cn/simple`）、`HF_ENDPOINT=https://hf-mirror.com`（memory index 下载 embedding 模型）、在 `semantic/wren` 下 `wren context build`
-- 重新生成 Wren 项目：`npx tsx services/context-engine/scripts/generate-wren-project.ts [--out <dir>]`
+1. WrenAI 语义检索相关上下文 + 注入业务规则（`backend/app/semantic/`）
+2. LLM（受治理提示词，LangChain/LangGraph 编排）生成 SQL
+3. WrenAI 受治理校验（解析 + 合法 + 仅工程内表）
+4. `app/semantic/sql_validation.py` 二次校验（表名白名单来自 `mdl_loader.load_allowed_tables`）
+5. 执行 + 分析 + LLM 防幻觉摘要
+
+- `WrenEngine`（`backend/app/semantic/wren_engine.py`）— WrenAI 进程内引擎，读 `semantic/wren/target/mdl.json`
+- `mdl_loader`（`backend/app/semantic/mdl_loader.py`）— 提取表名白名单
+- 启用条件：`.env` 配置 `WREN_PROJECT_DIR`（默认解析 `semantic/wren`），且 `semantic/wren` 已 `wren context build`
+- 服务器部署需：`pip install 'wrenai[postgres,memory]'`（国内源 `-i https://pypi.tuna.tsinghua.edu.cn/simple`）、`HF_ENDPOINT=https://hf-mirror.com`（memory index 下载 embedding 模型）、在 `semantic/wren` 下 `wren context build && wren memory index`
+
+## 从数据库导入（自定义 Agent 快捷方式）
+
+管理页"从数据库导入"按钮：给定数据库连接 + schema（+ 可选中文描述），后端内省 `information_schema` + `pg_catalog` 自动生成 WrenAI 工程 JSON，回填到表单供用户校验后注册。
+
+- 内省逻辑：`backend/app/semantic/db_introspect.py`（`introspect_database` / `build_mdl` / `parse_description_map`）
+- 端点：`POST /api/admin/agents/import-from-db`（`backend/app/routers/admin_agents.py`，纯生成、不落库）
 
 ## 构建、测试与开发命令
 
-在仓库根目录执行：
+后端（Python，在 `backend/` 目录）：
 
-- `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `pnpm-workspace.yaml` 的 `allowBuilds`）
-- `pnpm dev` — 并行启动 API（:8080）与 Web（:3000）。**不要在 dev 运行时执行 `pnpm build`**（两者共用 `.next` 缓存会冲突）
-- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test` — 构建、Lint、类型检查、运行 Vitest（177 个用例；API 集成测试需可监听本地端口）
-- `docker compose up -d` — 启动 PostgreSQL/Redis（使用本机镜像，见 `docker-compose.yml`）
-- 配置：在仓库根创建 `.env`（参考 `.env.example`），API 通过 dotenv 自动加载；`LLM_PROVIDER`（`mock|openai|anthropic|ollama`）切换离线规则模式与 LLM 动态 SQL 模式；`SESSION_DIR` 可覆盖会话存储目录（默认 `data/sessions`，已 gitignore）；`ADMIN_TOKEN`（管理面鉴权）+ `AGENT_SECRET_KEY`（连接串加密密钥，配置后才启用自定义 Agent）；`WREN_BIN` + `WREN_PROJECT_DIR`（新版 Wren CLI 受治理模式开关，见上）
+- `pip install -e backend[dev]`（或 `pip install -e '.[dev]'` 在 `backend/` 内）— 安装依赖（国内源 `-i https://pypi.tuna.tsinghua.edu.cn/simple`）
+- `uvicorn app.main:app --port 8080 --reload`（在 `backend/` 内）— 启动 API（:8080）
+- `pytest backend/tests`（或 `pytest` 在 `backend/` 内）— 运行测试
+- 配置：仓库根 `.env`（参考 `.env.example`），后端用 pydantic-settings 自动加载；`OPENAI_API_KEY`/`OPENAI_BASE_URL`/`OPENAI_MODEL` 必配（LLM 统一走 OpenAI 兼容接口）；`ADMIN_TOKEN`（管理面鉴权）+ `AGENT_SECRET_KEY`（连接串加密密钥，配置后才启用自定义 Agent）；`AUTH_ENABLED=true`（生产必须，登录鉴权 + 会话归属隔离 + 用户管理）
+
+前端（TypeScript，在仓库根）：
+
+- 在 `frontend/` 内执行 `pnpm install` — 安装依赖（CI 用 `--frozen-lockfile`；pnpm 11 的构建白名单见 `frontend/pnpm-workspace.yaml` 的 `allowBuilds`）
+- `pnpm dev` 或 `pnpm dev:web`（在 `frontend/` 内）— 启动 Web（:3000）。**注意：`pnpm dev` 现在只起前端，后端需单独 `uvicorn` 起**。不要在 dev 运行时执行 `pnpm build`（`.next` 缓存冲突）
+- `pnpm build` / `pnpm lint` / `pnpm typecheck` / `pnpm test`（在 `frontend/` 内）— 前端构建/Lint/类型检查/测试
+
+基础设施：
+
+- `docker compose up -d` — 启动 PostgreSQL/Redis（见 `docker-compose.yml`）
 
 ## 编码风格与命名约定
 
-- TypeScript，2 空格缩进，分号，单引号（Prettier 强制）
-- strict 模式、`verbatimModuleSyntax`（类型导入用 `import type`）、`noUncheckedIndexedAccess`
-- 形状用 `interface`，服务用小类；文件名 kebab-case（`sql-runner.ts`），函数/变量 camelCase
-- 环境配置用 zod 校验（`apps/api/src/config.ts`）；语义 YAML 由 `src/mdl/loader.ts` 校验
+后端（Python）：4 空格缩进；模块 snake_case（`db_introspect.py`），函数/变量 snake_case，类 PascalCase；类型注解（`from __future__ import annotations`）；FastAPI 路由 + asyncpg 异步；pydantic-settings 校验环境配置。
+
+前端（TypeScript，仅 `frontend/apps/web`）：2 空格缩进，分号，单引号（Prettier 强制）；strict 模式、`verbatimModuleSyntax`、`noUncheckedIndexedAccess`；文件名 kebab-case，函数/变量 camelCase。
 
 ## 测试指南
 
-- Vitest；测试与源码同目录，命名 `*.test.ts`
-- 按行为命名：`describe('LlmContextEngine')` + `it('falls back when the LLM returns a dangerous statement')`
-- 覆盖：Provider 客户端（mock `fetch`）、SQL 校验、意图匹配、Agent 流水线（注入替身）、会话持久化（pi jsonl）、注册表/加密/审计、自定义 Agent 管理 API（临时端口集成测试）、Wren CLI 适配器（fake `wren` 脚本 + 注入替身）
+后端：pytest + pytest-asyncio（`asyncio_mode = "auto"`），测试在 `backend/tests/`，命名 `test_*.py`；纯函数测试（`test_result_analysis.py`、`test_db_introspect.py`、`test_sql_validation.py`、`test_crypto.py`、`test_ratelimit.py`、`test_metrics.py`）+ 认证（口令/令牌/中间件/用户管理）+ 会话存储（`test_session_ownership.py`，假池记录 SQL）+ `test_golden_sql.py`（真实 MDL dry_plan 回归集，wrenai 升级防护；本地需先 `wren context build`）。内省组装逻辑用纯函数测（喂固定 rows），DB 查询部分不测（项目无 DB fixture）。
+
+效果评测（非 pytest，需真实 DB/LLM/MDL，在 `backend/` 内执行）：`python -m evals.run_eval [--only <fnmatch>] [--judge]` 跑 NL→SQL 评测回归集（`backend/evals/cases/insurance.json`，30 条中文案例），报告落 `backend/evals/reports/`（已 gitignore）；判定逻辑纯函数测试见 `tests/test_eval_checks.py`。
+
+前端：Vitest（如 `frontend/apps/web` 有 `*.test.ts`）。
 
 ## 提交与 PR 指南
 
-- Conventional Commits，小写祈使句：`feat: add llm-powered sql generation`、`fix: raise proxy timeout for slow llm`
+- Conventional Commits，小写祈使句：`feat: add db introspection import`、`fix: drop ts backend, unify on python`
 - 每次提交一个逻辑变更；PR 面向 `main`，关联 issue、说明"改了什么/为什么"、列出手工验证步骤，UI 变更附截图

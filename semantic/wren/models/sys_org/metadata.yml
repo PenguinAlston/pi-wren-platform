@@ -1,0 +1,36 @@
+name: sys_org
+table_reference:
+  schema: public
+  table: sys_org
+primary_key: org_id
+properties:
+  description: 承保机构表（org_id 关联 ins_policy_main.org_code）
+columns:
+  - name: org_id
+    type: VARCHAR
+    properties:
+      description: 机构ID（关联键）
+  - name: org_name
+    type: VARCHAR
+    properties:
+      description: 机构名称
+  - name: org_short_name
+    type: VARCHAR
+    properties:
+      description: 机构简称
+  - name: parent_org_id
+    type: VARCHAR
+    properties:
+      description: 上级机构ID
+  - name: org_level
+    type: VARCHAR
+    properties:
+      description: 机构层级
+  - name: area_code
+    type: VARCHAR
+    properties:
+      description: 地区编码
+  - name: status
+    type: VARCHAR
+    properties:
+      description: 状态

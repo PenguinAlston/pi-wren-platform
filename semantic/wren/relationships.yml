@@ -29,3 +29,9 @@ relationships:
       - ins_customer
     join_type: MANY_TO_ONE
     condition: ins_policy_main.applicant_id = ins_customer.customer_id
+  - name: policy_org
+    models:
+      - ins_policy_main
+      - sys_org
+    join_type: MANY_TO_ONE
+    condition: ins_policy_main.org_code = sys_org.org_id

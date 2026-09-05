@@ -1,0 +1,17 @@
+# Web 镜像构建上下文（frontend/）白名单式排除：只需 workspace 清单 + shared-types + apps/web
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!.npmrc
+!tsconfig.base.json
+!eslint.config.mjs
+!packages/
+!packages/shared-types/
+!packages/shared-types/**
+!apps/
+!apps/web/
+!apps/web/**
+**/node_modules/
+**/.next/
+apps/web/.next/standalone/

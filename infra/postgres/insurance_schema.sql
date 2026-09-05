@@ -4,11 +4,6 @@
 -- 说明：datetime -> timestamp；longtext -> text
 -- =====================================================================
 
--- 清理旧版 demo 表（文档版表结构以 ins_ 前缀为准）
-DROP TABLE IF EXISTS insurance_payment CASCADE;
-DROP TABLE IF EXISTS insurance_claim CASCADE;
-DROP TABLE IF EXISTS insurance_policy CASCADE;
-
 -- ---------------------------------------------------------------------
 -- 5.1 系统基础公共域
 -- ---------------------------------------------------------------------
@@ -62,14 +57,26 @@ COMMENT ON TABLE sys_operation_log IS '系统操作日志：传统查询/AI问�
 
 CREATE TABLE ai_chat_session (
     session_id    varchar(64) PRIMARY KEY,
-    user_id       varchar(64) NOT NULL REFERENCES sys_user(user_id),
-    session_name  varchar(128),
-    chat_content  text NOT NULL,
+    user_id       varchar(64),                    -- 可空，预留登录（当前无登录系统）
+    session_name  varchar(128),                   -- 会话名（重命名用）
+    agent_id      varchar(64) NOT NULL,           -- 归属 Agent（会话按 Agent 隔离）
     create_time   timestamp DEFAULT CURRENT_TIMESTAMP,
     update_time   timestamp DEFAULT CURRENT_TIMESTAMP,
     is_delete     char(1) DEFAULT '0'
 );
-COMMENT ON TABLE ai_chat_session IS 'AI会话记录：多轮对话上下文与权限隔离';
+COMMENT ON TABLE ai_chat_session IS 'AI会话记录：会话主表（多轮对话按 Agent 隔离）';
+
+CREATE TABLE ai_chat_message (
+    id            bigserial PRIMARY KEY,
+    session_id    varchar(64) NOT NULL REFERENCES ai_chat_session(session_id) ON DELETE CASCADE,
+    question      text,
+    answer        text,
+    sql_text      text,                           -- 生成的 SQL（列名避开关键字 sql）
+    data_json     text,                           -- 查询结果 JSON 字符串
+    create_time   timestamp DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_ai_chat_message_session ON ai_chat_message(session_id);
+COMMENT ON TABLE ai_chat_message IS 'AI会话明细：每轮对话一条记录（question/answer/sql/结果）';
 
 -- ---------------------------------------------------------------------
 -- 5.2 产品费率业务域
@@ -346,3 +353,20 @@ CREATE TABLE ins_claim_audit (
 COMMENT ON TABLE ins_claim_audit IS '理赔审核记录表：立案/查勘/复核/终审';
 COMMENT ON COLUMN ins_claim_audit.audit_stage IS '审核阶段：立案审核/查勘审核/赔付复核/终审';
 COMMENT ON COLUMN ins_claim_audit.audit_result IS '审核结果：01-通过 02-驳回 03-待补充资料';
+
+-- ============================================================
+-- AI 问答反馈（效果闭环：点赞/点踩；每条回答一条，重复提交 UPSERT 覆盖）
+-- ============================================================
+CREATE TABLE ai_chat_feedback (
+    id          bigserial PRIMARY KEY,
+    message_id  bigint NOT NULL REFERENCES ai_chat_message(id) ON DELETE CASCADE,
+    session_id  varchar(64) NOT NULL,
+    user_id     varchar(64),
+    rating      smallint NOT NULL CHECK (rating IN (1, -1)),
+    comment     text,
+    created_at  timestamp DEFAULT CURRENT_TIMESTAMP,
+    updated_at  timestamp DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (message_id)
+);
+COMMENT ON TABLE ai_chat_feedback IS 'AI 问答反馈表：rating 1=赞 -1=踩，message_id 唯一';
+CREATE INDEX idx_feedback_rating ON ai_chat_feedback(rating, created_at);

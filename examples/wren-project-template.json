@@ -1,0 +1,16 @@
+{
+  "catalog": "demo",
+  "schema": "public",
+  "models": [
+    {
+      "name": "product",
+      "tableReference": { "catalog": "", "schema": "public", "table": "demo_product" },
+      "columns": [
+        { "name": "id", "type": "varchar" },
+        { "name": "name", "type": "varchar" },
+        { "name": "amount", "type": "numeric" }
+      ]
+    }
+  ],
+  "relationships": []
+}

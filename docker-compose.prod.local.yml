@@ -1,0 +1,6 @@
+# 本地演示用覆盖：宿主机 3000 被 dev 前端占用时，把容器 web 映射到 31000。
+# 用法：docker compose -f docker-compose.prod.yml -f docker-compose.prod.local.yml up -d --build
+services:
+  web:
+    ports: !override
+      - '31000:3000'
