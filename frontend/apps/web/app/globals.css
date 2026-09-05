@@ -2791,6 +2791,36 @@ pre.code,
   }
 }
 
+/* 大屏（≥1536px）：首页解除 1280px 容器上限铺满；对话列保持可读宽度并居中 */
+@media (min-width: 1536px) {
+  .doc-content:has(> .home-layout) {
+    max-width: none;
+    padding-inline: 28px;
+  }
+  .home-layout {
+    gap: 20px;
+  }
+  .home-layout .chat-sidebar {
+    flex-basis: 280px;
+  }
+  .home-rail {
+    flex-basis: 264px;
+  }
+  .home-main .chat-messages {
+    padding: 28px 40px;
+  }
+  .home-main .chat-messages > .chat-row,
+  .home-main .chat-messages > .error-banner {
+    width: 100%;
+    max-width: 920px;
+    margin-inline: auto;
+  }
+  .home-main .chat-input-bar {
+    padding-left: max(40px, calc((100% - 920px) / 2));
+    padding-right: max(40px, calc((100% - 920px) / 2));
+  }
+}
+
 @media (max-width: 900px) {
   .home-layout {
     flex-direction: column;
