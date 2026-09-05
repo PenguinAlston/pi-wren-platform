@@ -25,3 +25,19 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Pi 编排层（M1，可选）：docker compose --profile pi up -d
+  # 开发态 FastAPI 跑在宿主机，容器经 host.docker.internal 访问
+  pi-orchestrator:
+    build: ./services/pi-orchestrator
+    profiles: ["pi"]
+    environment:
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      PY_BACKEND_URL: http://host.docker.internal:8080
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - '8090:8090'
