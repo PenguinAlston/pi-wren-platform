@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, Collapse } from 'animal-island-ui';
+import { Button, Collapse, Switch } from '../components/ui';
 import type { AgentEvent, AgentRunResult } from '@pi-wren/shared-types';
 import { apiFetch } from '../lib/api';
 import ChatChart from './components/ChatChart';
@@ -81,18 +81,39 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Pi 编排灰度开关（M1）：开启后走 /api/assistant/*（Pi 多工具编排），关闭走经典问数
+  const [piMode, setPiMode] = useState(false);
+  useEffect(() => {
+    setPiMode(localStorage.getItem('piwren_assistant_mode') === '1');
+  }, []);
+  const togglePiMode = useCallback(() => {
+    setPiMode((prev) => {
+      const next = !prev;
+      localStorage.setItem('piwren_assistant_mode', next ? '1' : '0');
+      return next;
+    });
+    setMessages([]);
+    setActiveSessionId(undefined);
+    setError(null);
+  }, []);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadSessions = useCallback(async (search?: string, agent?: string) => {
     const query = search ?? sessionsSearch;
-    const params = new URLSearchParams();
-    if (query) params.set('search', query);
-    // 按 Agent 隔离会话列表：只拉当前 domain 的会话
-    const agentId = agent ?? domain;
-    if (agentId) params.set('agentId', agentId);
     try {
-      const response = await apiFetch(`/api/sessions${params.toString() ? `?${params.toString()}` : ''}`);
+      // Pi 模式会话列表来自编排层（暂不支持搜索过滤）；经典模式按 domain 隔离
+      const url = piMode
+        ? `/api/assistant/sessions${query ? `?search=${encodeURIComponent(query)}` : ''}`
+        : (() => {
+            const params = new URLSearchParams();
+            if (query) params.set('search', query);
+            const agentId = agent ?? domain;
+            if (agentId) params.set('agentId', agentId);
+            return `/api/sessions${params.toString() ? `?${params.toString()}` : ''}`;
+          })();
+      const response = await apiFetch(url);
       if (response.ok) {
         const body = (await response.json()) as { sessions: SessionSummary[] };
         setSessions(body.sessions ?? []);
@@ -100,7 +121,7 @@ export default function ChatPage() {
     } catch {
       // 服务未就绪时保持现状
     }
-  }, [sessionsSearch, domain]);
+  }, [sessionsSearch, domain, piMode]);
 
   useEffect(() => {
     apiFetch('/api/agents')
@@ -153,12 +174,15 @@ export default function ChatPage() {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 120_000);
       try {
-        const response = await apiFetch(`/api/agent/${domain}/chat/stream`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, sessionId: activeSessionId }),
-          signal: controller.signal,
-        });
+        const response = await apiFetch(
+          piMode ? '/api/assistant/chat/stream' : `/api/agent/${domain}/chat/stream`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, sessionId: activeSessionId }),
+            signal: controller.signal,
+          },
+        );
 
         if (!response.ok || !response.body) {
           const body = (await response.json().catch(() => ({}))) as { error?: string };
@@ -215,7 +239,7 @@ export default function ChatPage() {
         setLoading(false);
       }
     },
-    [input, loading, domain, activeSessionId, patchMessage, loadSessions],
+        [input, loading, domain, activeSessionId, piMode, patchMessage, loadSessions],
   );
 
   const newSession = useCallback(() => {
@@ -235,7 +259,11 @@ export default function ChatPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}`);
+      const response = await apiFetch(
+        piMode
+          ? `/api/assistant/sessions/${encodeURIComponent(sessionId)}`
+          : `/api/sessions/${encodeURIComponent(sessionId)}`,
+      );
       if (!response.ok) {
         throw new Error(`会话加载失败（${response.status}）`);
       }
@@ -271,7 +299,7 @@ export default function ChatPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [piMode]);
 
   const renameSession = useCallback(
     async (sessionId: string, name: string) => {
@@ -287,9 +315,12 @@ export default function ChatPage() {
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
-      const response = await apiFetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
-        method: 'DELETE',
-      });
+      const response = await apiFetch(
+        piMode
+          ? `/api/assistant/sessions/${encodeURIComponent(sessionId)}`
+          : `/api/sessions/${encodeURIComponent(sessionId)}`,
+        { method: 'DELETE' },
+      );
       if (response.ok) {
         if (sessionId === activeSessionId) {
           setMessages([]);
@@ -298,7 +329,7 @@ export default function ChatPage() {
         void loadSessions(sessionsSearch);
       }
     },
-    [activeSessionId, loadSessions, sessionsSearch],
+    [activeSessionId, loadSessions, sessionsSearch, piMode],
   );
 
   const copyAnswer = async (id: string, content: string) => {
@@ -388,6 +419,8 @@ export default function ChatPage() {
             ))}
           </div>
           <div className="chat-header-right">
+            <span className="meta">Pi 编排</span>
+            <Switch checked={piMode} onChange={togglePiMode} />
             {activeSessionId ? <span className="meta">会话 {activeSessionId.slice(0, 8)}</span> : null}
             {messages.length > 0 ? (
               <Button type="link" size="small" onClick={newSession} disabled={loading}>
