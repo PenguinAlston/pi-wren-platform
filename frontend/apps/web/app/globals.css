@@ -2668,21 +2668,19 @@ pre.code,
   position: relative;
 }
 
-/* 落地态：问候语居中，输入框尚未对话时上浮 */
-.home-main:not(.in-conversation) .chat-messages {
+/* 落地态：问候语 + 输入框居中（新会话时输入框在问候语下方，更符合使用逻辑） */
+.home-landing {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px 12vh;
   background:
     radial-gradient(560px 260px at 50% -30px, rgba(25, 180, 157, 0.1), transparent 70%),
     var(--pw-bg);
-}
-
-.home-landing {
-  position: absolute;
-  top: 26%;
-  left: 0;
-  right: 0;
-  text-align: center;
-  padding: 0 24px;
-  pointer-events: none;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .home-greeting {
@@ -2698,6 +2696,39 @@ pre.code,
   margin: 0;
   font-size: 15px;
   color: var(--pw-text-2);
+}
+
+/* 落地态浮动输入卡片（与对话态底栏视觉区分） */
+.home-input-floating {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: min(720px, 100%);
+  margin-top: 32px;
+  background: var(--pw-surface);
+  border: 1px solid var(--pw-border);
+  border-radius: 26px;
+  padding: 10px 10px 10px 6px;
+  box-shadow: var(--pw-shadow);
+  transition: border-color var(--pw-duration) var(--pw-ease), box-shadow var(--pw-duration) var(--pw-ease);
+}
+
+.home-input-floating:focus-within {
+  border-color: var(--pw-primary);
+  box-shadow:
+    0 0 0 3px rgba(25, 180, 157, 0.14),
+    var(--pw-shadow);
+}
+
+.home-input-floating .chat-textarea {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 8px 12px;
+}
+
+.home-input-floating .chat-textarea:focus {
+  box-shadow: none;
 }
 
 /* 右侧功能面板 */

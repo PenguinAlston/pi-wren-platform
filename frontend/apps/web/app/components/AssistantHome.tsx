@@ -332,6 +332,33 @@ export default function AssistantHome() {
     element.style.height = `${Math.min(element.scrollHeight, 180)}px`;
   };
 
+  /** 输入栏：落地态嵌在问候语下方（floating），对话态吸附底部（dock）；landing 时自动聚焦。 */
+  const renderInput = (floating: boolean) => (
+    <>
+      <textarea
+        ref={textareaRef}
+        className="chat-textarea"
+        placeholder="向企业数据提问…（⌘/Ctrl + Enter 发送）"
+        value={input}
+        rows={1}
+        autoFocus={floating}
+        onChange={(e) => {
+          setInput(e.target.value);
+          autoGrow(e.target);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault();
+            void send();
+          }
+        }}
+      />
+      <Button type="primary" loading={loading} onClick={() => void send()} disabled={!input.trim()}>
+        发送
+      </Button>
+    </>
+  );
+
   return (
     <div className="home-layout">
       <SessionSidebar
@@ -344,107 +371,87 @@ export default function AssistantHome() {
         onDelete={(sessionId) => void deleteSession(sessionId)}
       />
 
-      <section className={`home-main${hasConversation ? ' in-conversation' : ''}`}>
-        {!hasConversation ? (
+      {hasConversation ? (
+        <section className="home-main in-conversation">
+          <div className="chat-messages">
+            {messages.map((message) =>
+              message.role === 'user' ? (
+                <div key={message.id} className="chat-row user">
+                  <div className="chat-bubble user">{message.content}</div>
+                </div>
+              ) : (
+                <div key={message.id} className="chat-row assistant">
+                  <div className={`chat-bubble assistant${message.error ? ' error' : ''}`}>
+                    {message.events && message.events.length > 0 ? (
+                      <ThinkingStream events={message.events} loading={message.loading ?? false} />
+                    ) : null}
+                    {message.loading && (!message.events || message.events.length === 0) ? (
+                      <span className="chat-typing">
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    ) : null}
+                    {!message.loading ? (
+                      <>
+                        {message.content ? <Markdown content={message.content} /> : null}
+                        {message.error ? (
+                          <Link href="/chat" className="meta" style={{ display: 'inline-block', marginTop: 6 }}>
+                            智能助手不可用？去经典问数 →
+                          </Link>
+                        ) : null}
+                        {message.data && message.data.length > 0 ? (
+                          <>
+                            <ChatChart data={message.data} />
+                            <ChatResultTable data={message.data} />
+                          </>
+                        ) : null}
+                        {message.sql ? (
+                          <div className="chat-details">
+                            <Collapse question="查看 SQL" answer={<pre className="code">{message.sql}</pre>} />
+                          </div>
+                        ) : null}
+                        <div className="chat-bubble-actions">
+                          <Button
+                            type="link"
+                            size="small"
+                            onClick={() => void copyAnswer(message.id, message.content)}
+                          >
+                            {copiedId === message.id ? '已复制' : '复制'}
+                          </Button>
+                          {!message.error && message.content ? (
+                            <MessageFeedback
+                              rating={message.feedback ?? null}
+                              disabled={!message.messageId}
+                              onRate={(next) =>
+                                void submitFeedback(message.id, message.messageId, message.feedback ?? null, next)
+                              }
+                            />
+                          ) : null}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ),
+            )}
+            {error && !messages.some((m) => m.loading) ? <div className="error-banner">{error}</div> : null}
+            <div ref={messagesEndRef} />
+          </div>
+
+          <footer className="chat-input-bar">{renderInput(false)}</footer>
+        </section>
+      ) : (
+        <section className="home-main">
           <div className="home-landing">
             <h1 className="home-greeting">
               {greeting()}{displayName ? `，${displayName}` : ''}
             </h1>
             <p className="home-tagline">我是你的企业数据助手，用自然语言提问，我来查数、做图、给结论。</p>
+            <div className="home-input-floating">{renderInput(true)}</div>
           </div>
-        ) : null}
-
-        <div className="chat-messages">
-          {hasConversation
-            ? messages.map((message) =>
-                message.role === 'user' ? (
-                  <div key={message.id} className="chat-row user">
-                    <div className="chat-bubble user">{message.content}</div>
-                  </div>
-                ) : (
-                  <div key={message.id} className="chat-row assistant">
-                    <div className={`chat-bubble assistant${message.error ? ' error' : ''}`}>
-                      {message.events && message.events.length > 0 ? (
-                        <ThinkingStream events={message.events} loading={message.loading ?? false} />
-                      ) : null}
-                      {message.loading && (!message.events || message.events.length === 0) ? (
-                        <span className="chat-typing">
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      ) : null}
-                      {!message.loading ? (
-                        <>
-                          {message.content ? <Markdown content={message.content} /> : null}
-                          {message.error ? (
-                            <Link href="/chat" className="meta" style={{ display: 'inline-block', marginTop: 6 }}>
-                              智能助手不可用？去经典问数 →
-                            </Link>
-                          ) : null}
-                          {message.data && message.data.length > 0 ? (
-                            <>
-                              <ChatChart data={message.data} />
-                              <ChatResultTable data={message.data} />
-                            </>
-                          ) : null}
-                          {message.sql ? (
-                            <div className="chat-details">
-                              <Collapse question="查看 SQL" answer={<pre className="code">{message.sql}</pre>} />
-                            </div>
-                          ) : null}
-                          <div className="chat-bubble-actions">
-                            <Button
-                              type="link"
-                              size="small"
-                              onClick={() => void copyAnswer(message.id, message.content)}
-                            >
-                              {copiedId === message.id ? '已复制' : '复制'}
-                            </Button>
-                            {!message.error && message.content ? (
-                              <MessageFeedback
-                                rating={message.feedback ?? null}
-                                disabled={!message.messageId}
-                                onRate={(next) =>
-                                  void submitFeedback(message.id, message.messageId, message.feedback ?? null, next)
-                                }
-                              />
-                            ) : null}
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                ),
-              )
-            : null}
-          {error && !messages.some((m) => m.loading) ? <div className="error-banner">{error}</div> : null}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <footer className="chat-input-bar">
-          <textarea
-            ref={textareaRef}
-            className="chat-textarea"
-            placeholder="向企业数据提问…（⌘/Ctrl + Enter 发送）"
-            value={input}
-            rows={1}
-            onChange={(e) => {
-              setInput(e.target.value);
-              autoGrow(e.target);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                void send();
-              }
-            }}
-          />
-          <Button type="primary" loading={loading} onClick={() => void send()} disabled={!input.trim()}>
-            发送
-          </Button>
-        </footer>
-      </section>
+        </section>
+      )}
 
       <aside className="home-rail">
         <div className="home-rail-title">功能面板</div>
