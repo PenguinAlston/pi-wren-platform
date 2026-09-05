@@ -15,8 +15,9 @@ dependencies = [
     "PyYAML>=6.0",
     "python-dotenv>=1.0",
     "cryptography>=43",
-    # WrenAI 原生 SDK（进程内调用，无子进程）
-    "wrenai[postgres,memory]>=0.13",
+    # WrenAI 原生 SDK（进程内调用，无子进程）；memory = embedding 语义检索（运行时约 1GB
+    # 内存），生产小内存镜像不装，经 WREN_MEMORY_ENABLED=false 关闭（见 wren_engine.py）
+    "wrenai[postgres]>=0.13",
     # LangChain + LangGraph agent
     "langchain>=0.3",
     "langchain-openai>=0.2",
@@ -31,6 +32,8 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
+    # 本地开发保留 embedding 语义检索（生产小内存镜像不装）
+    "wrenai[memory]>=0.13",
 ]
 
 [build-system]

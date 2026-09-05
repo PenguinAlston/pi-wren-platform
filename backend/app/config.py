@@ -70,10 +70,13 @@ class Settings(BaseSettings):
 
     # --- WrenAI ---
     WREN_PROJECT_DIR: str = "semantic/wren"
-    # strict mode：fail-closed 表白名单（仅工程内表/视图）+ 危险函数拦截（read_csv/dblink 等数据外读）
+    # strict mode：fail-closed 治理（表白名单 + 数据外读函数拦截），翻译层兜底之上的显式闸
     WREN_STRICT_MODE: bool = True
     # 额外拒绝的函数（逗号分隔，叠加到 wren 内置黑名单之上）
     WREN_DENIED_FUNCTIONS: str = ""
+    # WrenMemory 语义检索（embedding 模型，运行时约 1GB 内存）：小内存服务器可关闭，
+    # 关闭后语义上下文直接从 MDL 生成（表/列/注释），业务规则 knowledge/rules 仍然生效
+    WREN_MEMORY_ENABLED: bool = True
 
     # --- AI 查询硬约束 ---
     # 行数上限：防"列出全部保单"类查询打爆内存/前端；达到上限时结果会被截断并提示

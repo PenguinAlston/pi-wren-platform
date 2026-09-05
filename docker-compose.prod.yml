@@ -43,15 +43,19 @@ services:
         # 国内构建换源：PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
         #（基础镜像若需走镜像站：PYTHON_IMAGE=docker.1ms.run/library/python:3.13.10-slim）
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
     env_file: .env
     environment:
       # 容器网络内经服务名连库（.env 里的 localhost 不适用于容器）
       DB_HOST: postgres
       WREN_PROJECT_DIR: /semantic/wren
+      # Pi 编排层（INTERNAL_API_TOKEN 两边一致，取自 .env）
+      PI_ORCHESTRATOR_URL: http://pi-orchestrator:8090
     volumes:
       - ./semantic:/semantic:ro
     ports:
-      - '8080:8080'
+      # 宿主 8080 常被占用（示例部署机上有原生 python 服务），对外映射 18080
+      - '18080:8080'
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,13 +65,17 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    # 1.6G 小内存主机上限制后端（wren 引擎池建议 AI_ENGINE_POOL_SIZE=1）
+    mem_limit: 768m
     restart: unless-stopped
 
   web:
     build:
       context: ./frontend
       dockerfile: apps/web/Dockerfile
-      # 基础镜像若需走镜像站：NODE_IMAGE=docker.1ms.run/library/node:22-alpine
+      args:
+        # 基础镜像若需走镜像站：NODE_IMAGE=docker.1ms.run/library/node:22-alpine
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
     environment:
       NEXT_PUBLIC_API_URL: http://backend:8080
     ports:
@@ -75,7 +83,26 @@ services:
     depends_on:
       backend:
         condition: service_started
+    mem_limit: 320m
+    restart: unless-stopped
+
+  # Pi 编排层（M1）：Agent 循环 + ask_data 工具，仅容器网络内部访问
+  pi-orchestrator:
+    build: ./services/pi-orchestrator
+    environment:
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN}
+      PY_BACKEND_URL: http://backend:8080
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      OPENAI_MODEL: ${OPENAI_MODEL}
+    volumes:
+      - pi_sessions:/app/data
+    depends_on:
+      backend:
+        condition: service_started
+    mem_limit: 256m
     restart: unless-stopped
 
 volumes:
   pgdata:
+  pi_sessions:

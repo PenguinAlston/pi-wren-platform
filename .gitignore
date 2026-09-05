@@ -60,3 +60,4 @@ backend/evals/reports/
 !backend/app/data/**
 backend/app/data/__pycache__/
 backend/app/data/**/*.pyc
+backend/torch_cpu.whl

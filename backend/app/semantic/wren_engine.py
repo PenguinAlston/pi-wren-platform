@@ -72,7 +72,6 @@ class WrenEngineService:
         # 延迟导入（wrenai 重，避免 import 时副作用）
         from wren.config import WrenConfig
         from wren.engine import WrenEngine
-        from wren.memory import WrenMemory
 
         self._engine_cls = WrenEngine
         # strict mode：fail-closed 治理（表白名单 + 数据外读函数拦截），翻译层兜底之上的显式闸
@@ -84,8 +83,16 @@ class WrenEngineService:
         self._engines: list = [self._build_engine() for _ in range(self._pool_size)]
         self._rr_index = 0
         self._rr_lock = threading.Lock()
-        self._memory = WrenMemory(str(project_dir))
-        logger.info("WrenEngineService 初始化完成: {}（引擎池 x{}）", project_dir, self._pool_size)
+        # WrenMemory 语义检索（embedding 模型运行时约 1GB 内存）：小内存部署可经
+        # WREN_MEMORY_ENABLED=false 关闭，fetch_context 降级为 MDL 直读上下文
+        if settings.WREN_MEMORY_ENABLED:
+            from wren.memory import WrenMemory
+
+            self._memory: WrenMemory | None = WrenMemory(str(project_dir))
+        else:
+            self._memory = None
+        logger.info("WrenEngineService 初始化完成: {}（引擎池 x{}，memory={}）",
+                    project_dir, self._pool_size, "on" if self._memory else "off")
 
     def _build_engine(self):
         return self._engine_cls(self._manifest_str, "postgres", self._connection_info,
@@ -100,14 +107,33 @@ class WrenEngineService:
 
     # --- 语义检索 ---
     def fetch_context(self, question: str) -> str:
-        """检索与问题相关的语义上下文（表/列/相似查询）。"""
+        """检索与问题相关的语义上下文（表/列/相似查询）。
+
+        memory 关闭（或检索失败）时降级：MDL 直读 schema 摘要 → instructions。
+        """
+        if self._memory is None:
+            return self._mdl_light_context()
         try:
             result = self._memory.get_context(manifest=self._manifest_dict, query=question)
             schema_text = result.get("schema", "") if isinstance(result, dict) else str(result)
-            return schema_text.strip()
+            return schema_text.strip() or self._mdl_light_context()
         except Exception as e:
-            logger.warning("get_context 失败，降级为 instructions: {}", e)
-            return self.fetch_instructions()
+            logger.warning("get_context 失败，降级为 MDL 直读: {}", e)
+            return self._mdl_light_context()
+
+    def _mdl_light_context(self) -> str:
+        """无向量检索的轻量语义上下文：MDL 里的表/列/描述，纯 JSON 解析零 ML。"""
+        lines: list[str] = []
+        for model in self._manifest_dict.get("models", []):
+            name = model.get("name", "")
+            desc = (model.get("description") or "").strip()
+            columns = model.get("columns", [])
+            col_text = ", ".join(
+                f"{c.get('name')}({c.get('type', '')})"
+                for c in columns[:40] if c.get("name")
+            )
+            lines.append(f"- {name}" + (f"：{desc}" if desc else "") + f"\n  列: {col_text}")
+        return "\n".join(lines)
 
     def fetch_instructions(self) -> str:
         """业务规则全文（knowledge/rules/）。"""

@@ -15,6 +15,8 @@ ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 WORKDIR /app
 
 # 先装依赖（层缓存）：用最小包骨架触发 pyproject 依赖解析
+# 注意：生产镜像不装 wrenai[memory]（embedding/torch 约 1GB 运行内存 + GB 级依赖），
+# WREN_MEMORY_ENABLED=false 时语义上下文从 MDL 直读（见 wren_engine.py）
 COPY pyproject.toml ./
 RUN mkdir -p app && touch app/__init__.py \
     && pip install --no-cache-dir --index-url ${PIP_INDEX_URL} -e . \
