@@ -9,8 +9,8 @@ import ChatResultTable from './components/ChatResultTable';
 import SessionSidebar, { type SessionSummary } from './components/SessionSidebar';
 import { ThinkingStream } from './components/ThinkingStream';
 import { Markdown } from './components/Markdown';
-import { MessageFeedback } from './components/MessageFeedback';
-import { parseSseFrames, type FeedbackValue } from './components/chat-utils';
+import { MessageActions } from './components/MessageActions';
+import { parseSseFrames, formatClock, type FeedbackValue } from './components/chat-utils';
 
 interface AgentInfo {
   id: string;
@@ -30,6 +30,8 @@ interface ChatMessageItem {
   /** 落库消息 id（done 帧返回或历史回看带出）；缺失时反馈按钮禁用。 */
   messageId?: number;
   feedback?: FeedbackValue;
+  /** 回答时间（HH:mm），动作行灰字展示。 */
+  time?: string;
 }
 
 const EXAMPLES: Record<string, string[]> = {
@@ -189,6 +191,7 @@ export default function ChatPage() {
                 data: run.data,
                 events: run.events,
                 messageId: run.messageId,
+                time: formatClock(new Date().toISOString()),
                 loading: false,
               });
               setActiveSessionId(run.sessionId);
@@ -269,6 +272,7 @@ export default function ChatPage() {
           sql: record.sql,
           data: record.data,
           messageId: record.id,
+          time: formatClock(record.createdAt),
           feedback: record.feedback?.rating === 1 ? 'up' : record.feedback?.rating === -1 ? 'down' : null,
         });
       }
@@ -471,22 +475,17 @@ export default function ChatPage() {
                         </div>
                       ) : null}
                       <div className="chat-bubble-actions">
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() => void copyAnswer(message.id, message.content)}
-                        >
-                          {copiedId === message.id ? '已复制' : '复制'}
-                        </Button>
-                        {!message.error && message.content ? (
-                          <MessageFeedback
-                            rating={message.feedback ?? null}
-                            disabled={!message.messageId}
-                            onRate={(next) =>
-                              void submitFeedback(message.id, message.messageId, message.feedback ?? null, next)
-                            }
-                          />
-                        ) : null}
+                        <MessageActions
+                          content={message.content}
+                          copied={copiedId === message.id}
+                          onCopy={() => void copyAnswer(message.id, message.content)}
+                          rating={message.feedback ?? null}
+                          messageId={message.messageId}
+                          time={message.time}
+                          onRate={(next) =>
+                            void submitFeedback(message.id, message.messageId, message.feedback ?? null, next)
+                          }
+                        />
                       </div>
                     </>
                   ) : null}

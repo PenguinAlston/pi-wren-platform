@@ -10,8 +10,8 @@ import ChatResultTable from '../chat/components/ChatResultTable';
 import SessionSidebar, { type SessionSummary } from '../chat/components/SessionSidebar';
 import { ThinkingStream } from '../chat/components/ThinkingStream';
 import { Markdown } from '../chat/components/Markdown';
-import { MessageFeedback } from '../chat/components/MessageFeedback';
-import { parseSseFrames, type FeedbackValue } from '../chat/components/chat-utils';
+import { MessageActions } from '../chat/components/MessageActions';
+import { parseSseFrames, formatClock, type FeedbackValue } from '../chat/components/chat-utils';
 
 interface ChatMessageItem {
   id: string;
@@ -24,6 +24,8 @@ interface ChatMessageItem {
   error?: boolean;
   messageId?: number;
   feedback?: FeedbackValue;
+  /** 回答时间（HH:mm），动作行灰字展示。 */
+  time?: string;
 }
 
 interface PanelItem {
@@ -192,6 +194,7 @@ export default function AssistantHome() {
                 data: run.data,
                 events: run.events,
                 messageId: run.messageId ?? undefined,
+                time: formatClock(new Date().toISOString()),
                 loading: false,
               });
               setActiveSessionId(run.sessionId);
@@ -243,7 +246,7 @@ export default function AssistantHome() {
       const response = await apiFetch(`/api/assistant/sessions/${encodeURIComponent(sessionId)}`);
       if (!response.ok) throw new Error(`会话加载失败（${response.status}）`);
       const body = (await response.json()) as {
-        messages: { role: 'user' | 'assistant'; content: string; sql?: string; data?: Record<string, unknown>[] }[];
+        messages: { role: 'user' | 'assistant'; content: string; sql?: string; data?: Record<string, unknown>[]; at?: string }[];
       };
       setMessages(
         body.messages.map((m) => ({
@@ -252,6 +255,7 @@ export default function AssistantHome() {
           content: m.content,
           sql: m.sql,
           data: m.data,
+          time: m.role === 'assistant' && m.at ? formatClock(m.at) : undefined,
         })),
       );
       setActiveSessionId(sessionId);
@@ -411,24 +415,19 @@ export default function AssistantHome() {
                             <Collapse question="查看 SQL" answer={<pre className="code">{message.sql}</pre>} />
                           </div>
                         ) : null}
-                        <div className="chat-bubble-actions">
-                          <Button
-                            type="link"
-                            size="small"
-                            onClick={() => void copyAnswer(message.id, message.content)}
-                          >
-                            {copiedId === message.id ? '已复制' : '复制'}
-                          </Button>
-                          {!message.error && message.content ? (
-                            <MessageFeedback
+                          <div className="chat-bubble-actions">
+                            <MessageActions
+                              content={message.content}
+                              copied={copiedId === message.id}
+                              onCopy={() => void copyAnswer(message.id, message.content)}
                               rating={message.feedback ?? null}
-                              disabled={!message.messageId}
+                              messageId={message.messageId}
+                              time={message.time}
                               onRate={(next) =>
                                 void submitFeedback(message.id, message.messageId, message.feedback ?? null, next)
                               }
                             />
-                          ) : null}
-                        </div>
+                          </div>
                       </>
                     ) : null}
                   </div>

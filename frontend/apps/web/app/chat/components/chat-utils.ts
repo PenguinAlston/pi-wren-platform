@@ -153,3 +153,12 @@ export function relativeTime(iso: string): string {
   }
   return new Date(iso).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
+
+/** 时钟格式（HH:mm）：动作行时间戳用；无效输入返回空串。 */
+export function formatClock(iso: string): string {
+  const time = new Date(iso).getTime();
+  if (Number.isNaN(time)) {
+    return '';
+  }
+  return new Date(time).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
+}
