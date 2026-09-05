@@ -57,7 +57,7 @@ function DocSidebarInner() {
         <span className="doc-brand-badge">PW</span>
         <span>
           PI·WREN
-          <small>数据岛</small>
+          <small>数据智能平台</small>
         </span>
       </div>
 

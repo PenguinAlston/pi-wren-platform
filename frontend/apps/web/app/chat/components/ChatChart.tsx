@@ -9,10 +9,10 @@ import { detectChart, formatCell, type ChartSpec } from './chat-utils';
 
 echarts.use([BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer]);
 
-// 动物之森风调色板：薄荷/青/黄/绿/橙/粉，深棕文字
-const PALETTE = ['#19c8b9', '#3dd4c6', '#f5c31c', '#6fba2c', '#e59266', '#f8a6b2'];
-const AXIS_COLOR = '#9f927d';
-const SPLIT_LINE = 'rgba(159, 146, 125, 0.18)';
+// Material 3 调色板：品牌青主导 + 和谐辅助色，冷灰轴色
+const PALETTE = ['#19b49d', '#4a7dd8', '#e8a13c', '#7451d0', '#d4526e', '#3ba6c4'];
+const AXIS_COLOR = '#717b78';
+const SPLIT_LINE = 'rgba(113, 123, 120, 0.18)';
 
 interface Props {
   data: Record<string, unknown>[];
@@ -27,9 +27,9 @@ function buildOption(spec: ChartSpec, rows: Record<string, unknown>[]) {
     color: PALETTE,
     tooltip: {
       trigger: spec.type === 'pie' ? 'item' : 'axis',
-      backgroundColor: 'rgba(248, 248, 240, 0.96)',
-      borderColor: 'rgba(159, 146, 125, 0.5)',
-      textStyle: { color: '#794f27' },
+      backgroundColor: 'rgba(255, 255, 255, 0.98)',
+      borderColor: '#dbe5e2',
+      textStyle: { color: '#181d1c' },
     },
     legend: {
       show: spec.type === 'line' || spec.type === 'bar',
@@ -45,7 +45,7 @@ function buildOption(spec: ChartSpec, rows: Record<string, unknown>[]) {
         {
           type: 'pie',
           radius: ['38%', '68%'],
-          itemStyle: { borderColor: '#f8f8f0', borderWidth: 2 },
+          itemStyle: { borderColor: '#ffffff', borderWidth: 2 },
           label: { color: AXIS_COLOR },
           data: rows.map((row) => ({
             name: formatCell(row[spec.labelKey]),

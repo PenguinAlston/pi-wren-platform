@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button } from 'animal-island-ui';
+import { Button } from '../../components/ui';
 import { formatCell, toCsv } from './chat-utils';
 
 interface Props {

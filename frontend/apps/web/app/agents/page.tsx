@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Input, Modal, Switch } from 'animal-island-ui';
+import { Button, Input, Modal, Switch } from '../components/ui';
 import { apiFetch } from '../lib/api';
 
 interface CustomAgentView {

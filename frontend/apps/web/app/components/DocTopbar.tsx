@@ -21,7 +21,7 @@ function resolveTitle(pathname: string, search: URLSearchParams): { title: strin
   if (pathname === '/agents') {
     return { title: '自定义 Agent', crumb: '系统管理 / 自定义 Agent' };
   }
-  return { title: 'PI·WREN 数据岛', crumb: '导航' };
+  return { title: 'PI·WREN 数据智能平台', crumb: '导航' };
 }
 
 function useClock(): string {
@@ -126,7 +126,7 @@ function DocTopbarInner() {
         <span className="topbar-clock">{clock}</span>
         <span className={'topbar-status' + (online === false ? ' off' : '')}>
           <i />
-          {online === true ? 'SYS·OK' : online === false ? 'SYS·ERR' : 'SYS·…'}
+          {online === true ? '系统正常' : online === false ? '服务异常' : '检测中…'}
         </span>
         {userName && (
           <span className="topbar-status" style={{ cursor: 'pointer' }} onClick={logout} title="退出登录">

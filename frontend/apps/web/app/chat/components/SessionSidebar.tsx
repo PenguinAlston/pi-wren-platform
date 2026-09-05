@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Button, Input, Modal } from 'animal-island-ui';
+import { Button, Input, Modal } from '../../components/ui';
 import { relativeTime } from './chat-utils';
 
 export interface SessionSummary {
@@ -162,7 +162,7 @@ export default function SessionSidebar({
                           danger
                           block
                           size="small"
-                          style={{ color: 'var(--animal-error-color, #e05a5a)' }}
+                          style={{ color: 'var(--pw-danger, #cf4444)' }}
                           onClick={() => {
                             setConfirmDelete(session);
                             setMenuOpenId(null);

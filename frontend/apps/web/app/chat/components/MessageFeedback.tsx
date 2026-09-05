@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from 'animal-island-ui';
+import { Button } from '../../components/ui';
 import { nextFeedback, type FeedbackValue } from './chat-utils';
 
 interface MessageFeedbackProps {

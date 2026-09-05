@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Button, Input } from 'animal-island-ui';
+import { Button, Input } from '../components/ui';
 import { apiFetch } from '../lib/api';
 import DetailDrawer, { type DetailPayload } from './components/DetailDrawer';
 import {

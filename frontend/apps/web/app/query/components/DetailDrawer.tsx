@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Button } from 'animal-island-ui';
+import { Button } from '../../components/ui';
 import type { ModuleId, ModuleDef } from '../modules';
 import { COLUMN_LABELS, formatValue } from '../modules';
 

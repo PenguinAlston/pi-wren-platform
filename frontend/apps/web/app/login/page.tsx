@@ -72,69 +72,54 @@ function LoginInner() {
 
   if (checking) {
     return (
-      <main style={{ ...cardStyle, color: '#8d6e4c' }}>正在检查登录状态…</main>
+      <main className="login-page">
+        <div className="login-card">
+          <p className="login-hint" style={{ margin: 0 }}>
+            正在检查登录状态…
+          </p>
+        </div>
+      </main>
     );
   }
 
   return (
-    <main style={cardStyle}>
-      <h1 style={{ margin: 0, fontSize: 22, color: '#5b3e1e' }}>PI·WREN 数据岛</h1>
-      <p style={{ margin: '4px 0 20px', fontSize: 13, color: '#a08356' }}>请登录后继续使用</p>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14, width: 280 }}>
-        <input
-          style={inputStyle}
-          placeholder="用户名"
-          value={username}
-          autoComplete="username"
-          onChange={(e) => setUsername(e.target.value)}
-        />
-        <input
-          style={inputStyle}
-          placeholder="密码"
-          type="password"
-          value={password}
-          autoComplete="current-password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {error && <p style={{ margin: 0, fontSize: 13, color: '#c0564a' }}>{error}</p>}
-        <button
-          type="submit"
-          style={buttonStyle}
-          disabled={submitting || !username.trim() || !password}
-        >
-          {submitting ? '登录中…' : '登录'}
-        </button>
-      </form>
+    <main className="login-page">
+      <div className="login-card">
+        <div className="login-brand">
+          <span className="doc-brand-badge">PW</span>
+          <div>
+            <h1 className="login-title">PI·WREN 数据智能平台</h1>
+            <p className="login-hint">请登录后继续使用</p>
+          </div>
+        </div>
+        <form onSubmit={submit} className="login-form">
+          <label className="query-field">
+            <span className="query-field-label">用户名</span>
+            <input
+              className="input"
+              placeholder="请输入用户名"
+              value={username}
+              autoComplete="username"
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </label>
+          <label className="query-field">
+            <span className="query-field-label">密码</span>
+            <input
+              className="input"
+              placeholder="请输入密码"
+              type="password"
+              value={password}
+              autoComplete="current-password"
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          {error && <p className="login-error">{error}</p>}
+          <button type="submit" className="btn" disabled={submitting || !username.trim() || !password}>
+            {submitting ? '登录中…' : '登录'}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  minHeight: '100vh',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: '#f6efe3',
-  fontFamily: 'inherit',
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  border: '1px solid #d9c8a9',
-  borderRadius: 8,
-  fontSize: 14,
-  outline: 'none',
-  background: '#fffdf8',
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  border: 'none',
-  borderRadius: 8,
-  fontSize: 14,
-  fontWeight: 600,
-  color: '#fffdf8',
-  background: '#8d6e4c',
-  cursor: 'pointer',
-};
