@@ -17,7 +17,19 @@ from loguru import logger
 
 from app.config import get_settings
 from app.deps import AppState, build_state
-from app.routers import admin_agents, admin_users, agents, auth, chat, health, sessions, traditional
+from app.routers import (
+    admin_agents,
+    admin_users,
+    agents,
+    assistant,
+    auth,
+    chat,
+    graph,
+    health,
+    internal,
+    sessions,
+    traditional,
+)
 
 
 def _setup_logging():
@@ -94,6 +106,9 @@ def create_app() -> FastAPI:
     app.include_router(admin_agents.router)
     app.include_router(admin_users.router)
     app.include_router(traditional.router)
+    app.include_router(graph.router)
+    app.include_router(internal.router)
+    app.include_router(assistant.router)
 
     @app.get("/")
     async def root():
