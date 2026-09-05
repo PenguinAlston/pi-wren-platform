@@ -8,6 +8,26 @@ export interface ChartSpec {
   valueKeys: string[];
 }
 
+export interface SseFrame {
+  event: string;
+  data: string;
+}
+
+/** 解析 SSE 文本流为帧列表（\n\n 分帧；与后端 EventSourceResponse sep='\n' 契约一致）。 */
+export function parseSseFrames(buffer: string): { frames: SseFrame[]; rest: string } {
+  const parts = buffer.split('\n\n');
+  const rest = parts.pop() ?? '';
+  const frames: SseFrame[] = [];
+  for (const part of parts) {
+    const event = part.match(/^event: (.+)$/m)?.[1];
+    const data = part.match(/^data: (.+)$/m)?.[1];
+    if (event && data !== undefined) {
+      frames.push({ event, data });
+    }
+  }
+  return { frames, rest };
+}
+
 export type FeedbackRating = 'up' | 'down';
 export type FeedbackValue = FeedbackRating | null;
 

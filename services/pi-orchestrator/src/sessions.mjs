@@ -41,7 +41,12 @@ export function createSessionStore(dataDir) {
               const lines = (await readFile(join(dir, f), 'utf8')).split('\n').filter(Boolean);
               const first = JSON.parse(lines[0]);
               const last = JSON.parse(lines[lines.length - 1]);
-              return { id, name: String(first.question).slice(0, 40), updatedAt: last.at ?? '' };
+              return {
+                id,
+                name: String(first.question).slice(0, 40),
+                updatedAt: last.at ?? '',
+                turnCount: lines.length,
+              };
             } catch {
               return null; // 损坏会话隔离：列表跳过
             }

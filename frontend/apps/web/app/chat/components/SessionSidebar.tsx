@@ -19,7 +19,8 @@ interface Props {
   onSearchChange: (value: string) => void;
   onSelect: (sessionId: string) => void;
   onNew: () => void;
-  onRename: (sessionId: string, name: string) => void;
+  /** 未提供时隐藏「重命名」项（Pi 会话暂不支持改名）。 */
+  onRename?: (sessionId: string, name: string) => void;
   onDelete: (sessionId: string) => void;
 }
 
@@ -66,7 +67,7 @@ export default function SessionSidebar({
   const commitRename = (sessionId: string) => {
     const name = draft.trim();
     if (name) {
-      onRename(sessionId, name);
+      onRename?.(sessionId, name);
     }
     setEditingId(null);
   };
@@ -145,18 +146,20 @@ export default function SessionSidebar({
                         ref={menuRef}
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Button
-                          type="text"
-                          block
-                          size="small"
-                          onClick={() => {
-                            setEditingId(session.sessionId);
-                            setDraft(session.name);
-                            setMenuOpenId(null);
-                          }}
-                        >
-                          重命名
-                        </Button>
+                        {onRename ? (
+                          <Button
+                            type="text"
+                            block
+                            size="small"
+                            onClick={() => {
+                              setEditingId(session.sessionId);
+                              setDraft(session.name);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            重命名
+                          </Button>
+                        ) : null}
                         <Button
                           type="text"
                           danger
