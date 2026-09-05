@@ -56,8 +56,9 @@ async def internal_agent_chat(domain: str, request: Request):
         return JSONResponse(status_code=400, content={"error": "message is required (1-4000 chars)"})
     session_id = body.get("sessionId") or None
 
-    # persist=False：会话历史由 Pi 侧 JSONL 负责，不写入经典问数会话列表
+    # persist=True：回答落库拿到 messageId（Pi 模式反馈按钮可用）；会话 id 与 Pi 侧 JSONL 一致，
+    # 经典问数会话列表也能看到同一会话（统一历史）
     result = await spec.agent.answer(
-        message, session_id=session_id, user_id=user_id, org_access=access, persist=False,
+        message, session_id=session_id, user_id=user_id, org_access=access, persist=True,
     )
     return JSONResponse(content=result.model_dump())

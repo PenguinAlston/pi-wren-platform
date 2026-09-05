@@ -1,9 +1,11 @@
-"""assistant 代理测试：未启用 503、熔断状态机、转发头构造。"""
+"""assistant 代理测试：未启用 503、熔断状态机、健康探测恢复、转发头构造。"""
 from types import SimpleNamespace
 
 from fastapi import Request
+from starlette.responses import StreamingResponse
 
-from app.routers.assistant import CircuitBreaker, _forward_headers, assistant_chat_stream
+from app.routers import assistant
+from app.routers.assistant import CircuitBreaker, HealthProbe, _forward_headers, assistant_chat_stream
 
 
 def test_circuit_breaker_states():
@@ -27,6 +29,76 @@ def test_circuit_breaker_success_resets_consecutive():
     breaker.record_success(2.5)
     breaker.record_failure(3.0)
     assert not breaker.is_open(4.0)  # 连续计数已被成功复位
+
+
+def test_health_probe_cache():
+    probe = HealthProbe(ttl=5.0)
+    assert probe.cached(100.0) is None  # 无缓存
+    probe.update(100.0, True)
+    assert probe.cached(104.0) is True  # TTL 内
+    assert probe.cached(106.0) is None  # 过期
+    probe.update(106.0, False)
+    assert probe.cached(107.0) is False
+
+
+def _reset_singletons():
+    """熔断/探测是模块级单例，测试间重置避免缓存泄漏。"""
+    assistant._breaker = CircuitBreaker()
+    assistant._probe = HealthProbe()
+
+
+async def test_stream_503_when_breaker_open_and_unhealthy(monkeypatch):
+    _reset_singletons()
+    assistant._breaker.record_failure()
+    assistant._breaker.record_failure()
+    assistant._breaker.record_failure()
+    assert assistant._breaker.is_open()
+
+    async def unhealthy(base, headers):
+        return False
+
+    monkeypatch.setattr(assistant, "_probe_upstream", unhealthy)
+    state = SimpleNamespace(
+        settings=SimpleNamespace(PI_ORCHESTRATOR_URL="http://pi:8090", INTERNAL_API_TOKEN="tok"),
+        rate_limit_chat=None,
+    )
+    request = _request(state)
+    request.state.user = None
+
+    async def json_body():
+        return {"message": "hi"}
+
+    request.json = json_body
+    response = await assistant_chat_stream(request)
+    assert response.status_code == 503
+    assert assistant._breaker.is_open()  # 探测不健康，保持熔断
+
+
+async def test_stream_recovers_when_probe_healthy(monkeypatch):
+    _reset_singletons()
+    assistant._breaker.record_failure()
+    assistant._breaker.record_failure()
+    assistant._breaker.record_failure()
+    assert assistant._breaker.is_open()
+
+    async def healthy(base, headers):
+        return True
+
+    monkeypatch.setattr(assistant, "_probe_upstream", healthy)
+    state = SimpleNamespace(
+        settings=SimpleNamespace(PI_ORCHESTRATOR_URL="http://pi:8090", INTERNAL_API_TOKEN="tok"),
+        rate_limit_chat=None,
+    )
+    request = _request(state)
+    request.state.user = None
+
+    async def json_body():
+        return {"message": "hi"}
+
+    request.json = json_body
+    response = await assistant_chat_stream(request)
+    assert isinstance(response, StreamingResponse)  # 不再 503，进入流式转发
+    assert not assistant._breaker.is_open()  # 探测健康，熔断复位
 
 
 def _request(app_state, headers=None):

@@ -59,6 +59,51 @@ class CircuitBreaker:
 _breaker = CircuitBreaker()
 
 
+class HealthProbe:
+    """上游健康探测结果缓存（TTL 内复用，避免每次请求都打 /health）。"""
+
+    def __init__(self, ttl: float = 5.0):
+        self.ttl = ttl
+        self._ok: bool | None = None
+        self._at: float = 0.0
+
+    def cached(self, now: float) -> bool | None:
+        """TTL 内返回缓存结果，过期返回 None（需要重新探测）。"""
+        if self._ok is not None and now - self._at <= self.ttl:
+            return self._ok
+        return None
+
+    def update(self, now: float, ok: bool) -> None:
+        self._ok = ok
+        self._at = now
+
+
+_probe = HealthProbe()
+
+
+async def _probe_upstream(base: str, headers: dict) -> bool:
+    """GET {base}/health，1.5s 超时；可达且 status=ok 视为健康。"""
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(f"{base}/health", headers=headers, timeout=1.5)
+        return response.status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+async def _try_recover(base: str, headers: dict) -> bool:
+    """熔断打开时的恢复路径：探测健康（带缓存）→ 复位熔断。返回是否可放行。"""
+    now = time.monotonic()
+    ok = _probe.cached(now)
+    if ok is None:
+        ok = await _probe_upstream(base, headers)
+        _probe.update(now, ok)
+    if ok:
+        _breaker.record_success(now)
+        return True
+    return False
+
+
 def _forward_headers(settings, user) -> dict[str, str]:
     return {
         "x-internal-token": settings.INTERNAL_API_TOKEN or "",
@@ -105,10 +150,11 @@ async def assistant_chat_stream(request: Request):
     # 新会话由代理生成 sessionId（Node 端校验 ID_RE），done 帧回传后前端记住
     session_id = body.get("sessionId") or uuid.uuid4().hex[:16]
 
-    if _breaker.is_open():
+    # 熔断打开时先探测：Node 已恢复则复位放行（≤5s 探测缓存），仍不健康则快速失败
+    headers = _forward_headers(state.settings, user)
+    if _breaker.is_open() and not await _try_recover(base, headers):
         return JSONResponse(status_code=503, content={"error": "智能助手暂不可用，请稍后重试"})
 
-    headers = _forward_headers(state.settings, user)
     logger.info("assistant stream: session={} user={}", session_id, user_id or "-")
 
     async def generator():
@@ -140,9 +186,11 @@ async def assistant_chat_stream(request: Request):
     return StreamingResponse(generator(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
-async def _upstream_json(method: str, url: str, headers: dict) -> JSONResponse:
-    """带熔断的非流式转发（会话列表/详情/删除）。"""
-    if _breaker.is_open():
+async def _upstream_json(method: str, url: str, headers: dict, *, base: str | None = None) -> JSONResponse:
+    """带熔断的非流式转发（会话列表/详情/删除）；打开时探测恢复。"""
+    if base and _breaker.is_open() and not await _try_recover(base, headers):
+        return JSONResponse(status_code=503, content={"error": "智能助手暂不可用，请稍后重试"})
+    if not base and _breaker.is_open():
         return JSONResponse(status_code=503, content={"error": "智能助手暂不可用，请稍后重试"})
     try:
         async with httpx.AsyncClient() as client:
@@ -166,7 +214,8 @@ async def assistant_sessions(request: Request):
     if not base:
         return JSONResponse(status_code=503, content={"error": "智能助手未启用"})
     headers = _forward_headers(state.settings, getattr(request.state, "user", None))
-    return await _upstream_json("GET", f"{base}/sessions", headers)
+    query = f"?{request.url.query}" if request.url.query else ""
+    return await _upstream_json("GET", f"{base}/sessions{query}", headers, base=base)
 
 
 @router.get("/sessions/{session_id}")
@@ -176,7 +225,7 @@ async def assistant_session_detail(session_id: str, request: Request):
     if not base:
         return JSONResponse(status_code=503, content={"error": "智能助手未启用"})
     headers = _forward_headers(state.settings, getattr(request.state, "user", None))
-    return await _upstream_json("GET", f"{base}/sessions/{session_id}", headers)
+    return await _upstream_json("GET", f"{base}/sessions/{session_id}", headers, base=base)
 
 
 @router.delete("/sessions/{session_id}")
@@ -186,4 +235,4 @@ async def assistant_session_delete(session_id: str, request: Request):
     if not base:
         return JSONResponse(status_code=503, content={"error": "智能助手未启用"})
     headers = _forward_headers(state.settings, getattr(request.state, "user", None))
-    return await _upstream_json("DELETE", f"{base}/sessions/{session_id}", headers)
+    return await _upstream_json("DELETE", f"{base}/sessions/{session_id}", headers, base=base)

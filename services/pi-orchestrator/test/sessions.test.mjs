@@ -44,4 +44,17 @@ describe('session store', () => {
     expect(await store.list('nobody')).toEqual([]);
     expect(await store.get('nobody', 'nope')).toBeNull();
   });
+
+  it('搜索按名称/会话 id 子串过滤（大小写不敏感）', async () => {
+    const store = await tempStore();
+    await store.appendTurn('u1', 's1', { question: '各险种赔付率如何', answer: 'a', at: '2026-09-05T10:00:00Z' });
+    await store.appendTurn('u1', 's2', { question: '列出所有保单', answer: 'b', at: '2026-09-05T10:01:00Z' });
+    await store.appendTurn('u1', 'abc123', { question: '核保结论', answer: 'c', at: '2026-09-05T10:02:00Z' });
+
+    expect((await store.list('u1', '赔付')).map((s) => s.id)).toEqual(['s1']);
+    expect((await store.list('u1', '保单')).map((s) => s.id)).toEqual(['s2']);
+    expect((await store.list('u1', 'ABC')).map((s) => s.id)).toEqual(['abc123']); // id 匹配
+    expect(await store.list('u1', '')).toHaveLength(3); // 空 = 不过滤
+    expect(await store.list('u1', '不存在的关键词')).toEqual([]);
+  });
 });

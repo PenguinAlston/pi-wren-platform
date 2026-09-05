@@ -33,15 +33,25 @@ function guardToolCall(tool, guardrails, sink) {
         };
       }
       const result = await tool.execute(id, params);
-      try {
-        const payload = JSON.parse(result.content?.[0]?.text ?? '');
-        if (payload.ok && payload.sql !== undefined) {
-          sink.sql = payload.sql;
-          sink.data = payload.sampleRows ?? null;
-          sink.rowCount = payload.rowCount ?? 0;
+      // ask_data 结构化结果：优先 details 通道（全量行，不进模型上下文），回退解析 content 文本
+      const detailPayload = result.details ?? null;
+      if (detailPayload && detailPayload.rows !== undefined) {
+        sink.sql = detailPayload.sql ?? null;
+        sink.data = detailPayload.rows ?? null;
+        sink.rowCount = detailPayload.rowCount ?? 0;
+        sink.messageId = detailPayload.messageId ?? null;
+      } else {
+        try {
+          const payload = JSON.parse(result.content?.[0]?.text ?? '');
+          if (payload.ok && payload.sql !== undefined) {
+            sink.sql = payload.sql;
+            sink.data = payload.sampleRows ?? null;
+            sink.rowCount = payload.rowCount ?? 0;
+            sink.messageId = payload.messageId ?? null;
+          }
+        } catch {
+          // 非 JSON 工具结果忽略
         }
-      } catch {
-        // 非 JSON 工具结果忽略
       }
       return result;
     },
@@ -59,7 +69,7 @@ export function createAgentService({ config, model, tools = [], toolsFactory = n
       const guardrails = createGuardrails(config);
       const history = await store.history(userKey, sessionId, config.historyTurns);
       const state = { toolCallsStarted: 0, text: '' };
-      const sink = { sql: null, data: null, rowCount: 0 };
+      const sink = { sql: null, data: null, rowCount: 0, messageId: null };
       const events = [];
 
       const push = (event) => {
@@ -110,6 +120,7 @@ export function createAgentService({ config, model, tools = [], toolsFactory = n
         toolCalls: guardrails.toolCalls,
         sql: sink.sql,
         data: sink.data,
+        messageId: sink.messageId,
       };
     },
   };

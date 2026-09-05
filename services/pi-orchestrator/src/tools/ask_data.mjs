@@ -1,7 +1,11 @@
 import { Type } from '@earendil-works/pi-ai';
 
+function textPayload(payload) {
+  return { type: 'text', text: JSON.stringify(payload) };
+}
+
 function textResult(payload) {
-  return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+  return { content: [textPayload(payload)], details: {} };
 }
 
 /**
@@ -37,17 +41,22 @@ export function createAskDataTool({
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) {
-          return textResult({ ok: false, error: body.error ?? `backend ${response.status}` });
+          return { content: [textPayload({ ok: false, error: body.error ?? `backend ${response.status}` })], details: {} };
         }
         const rows = Array.isArray(body.data) ? body.data : [];
-        return textResult({
-          ok: !body.error,
-          answer: body.answer ?? '',
-          sql: body.sql ?? null,
-          rowCount: rows.length,
-          sampleRows: rows.slice(0, sampleRowLimit),
-          error: body.error ?? null,
-        });
+        return {
+          // content 喂给 LLM（sampleRows 截断，省上下文）；details 只给 UI 通道（不进模型载荷）
+          content: [textPayload({
+            ok: !body.error,
+            answer: body.answer ?? '',
+            sql: body.sql ?? null,
+            rowCount: rows.length,
+            sampleRows: rows.slice(0, sampleRowLimit),
+            messageId: body.messageId ?? null,
+            error: body.error ?? null,
+          })],
+          details: { sql: body.sql ?? null, rows, rowCount: rows.length, messageId: body.messageId ?? null },
+        };
       } catch (err) {
         const message = err?.name === 'AbortError' ? '查询超时' : String(err?.message ?? err);
         return textResult({ ok: false, error: message });

@@ -22,8 +22,8 @@ export function createSessionStore(dataDir) {
       await appendFile(file, `${JSON.stringify(turn)}\n`, 'utf8');
     },
 
-    /** 会话摘要列表（name 取首个提问，updatedAt 取末行时间），按更新时间倒序。 */
-    async list(userKey) {
+    /** 会话摘要列表（name 取首个提问，updatedAt 取末行时间），按更新时间倒序；search 按名称子串过滤。 */
+    async list(userKey, search = '') {
       const dir = join(dataDir, assertId(userKey, 'user'));
       let files;
       try {
@@ -31,6 +31,7 @@ export function createSessionStore(dataDir) {
       } catch {
         return [];
       }
+      const keyword = String(search ?? '').trim().toLowerCase();
       const sessions = await Promise.all(
         files
           .filter((f) => f.endsWith('.jsonl'))
@@ -46,7 +47,11 @@ export function createSessionStore(dataDir) {
             }
           }),
       );
-      return sessions.filter(Boolean).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+      const items = sessions.filter(Boolean);
+      const filtered = keyword
+        ? items.filter((s) => s.name.toLowerCase().includes(keyword) || s.id.toLowerCase().includes(keyword))
+        : items;
+      return filtered.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
     },
 
     /** 单会话完整记录；不存在返回 null。 */

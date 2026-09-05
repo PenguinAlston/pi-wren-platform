@@ -67,7 +67,7 @@ async def test_resolve_access_auth_disabled_unrestricted():
     assert user_id is None
 
 
-async def test_internal_agent_chat_passes_persist_false():
+async def test_internal_agent_chat_persists_with_identity():
     captured = {}
 
     async def fake_answer(question, **kwargs):
@@ -83,7 +83,7 @@ async def test_internal_agent_chat_passes_persist_false():
 
     request.json = json_body
     response = await internal_agent_chat("insurance", request)
-    assert captured["persist"] is False
+    assert captured["persist"] is True  # 落库拿 messageId，Pi 模式反馈按钮可用
     assert captured["user_id"] == "U1"
     assert captured["org_access"] == OrgAccess("org", "ORG1")
     assert response.status_code == 200

@@ -102,7 +102,8 @@ export function createHandler({ config, store, service }) {
     const pathSessionId = url.pathname.split('/')[2] ?? '';
 
     if (req.method === 'GET' && url.pathname === '/sessions') {
-      send(200, { sessions: await store.list(userKey) });
+      const search = url.searchParams.get('search') ?? '';
+      send(200, { sessions: await store.list(userKey, search) });
       return;
     }
     if (pathSessionId && req.method === 'GET' && url.pathname.startsWith('/sessions/')) {
@@ -169,7 +170,7 @@ export function createHandler({ config, store, service }) {
             events: result.events,
             toolCalls: [],
             durationMs: result.durationMs,
-            messageId: null,
+            messageId: result.messageId ?? null,
             error: null,
           }));
         }

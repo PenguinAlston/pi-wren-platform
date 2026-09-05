@@ -4,7 +4,7 @@ import { createAskDataTool } from '../src/tools/ask_data.mjs';
 describe('ask_data tool', () => {
   const options = { backendUrl: 'http://py:8080', internalToken: 'tok' };
 
-  it('成功：透传 answer/sql 并截断 sampleRows', async () => {
+  it('成功：LLM 拿截断 sampleRows，details 携带全量行（UI 通道）', async () => {
     const rows = Array.from({ length: 30 }, (_, i) => ({ i }));
     let captured;
     const fetchImpl = async (url, init) => {
@@ -24,6 +24,10 @@ describe('ask_data tool', () => {
     expect(payload.ok).toBe(true);
     expect(payload.rowCount).toBe(30);
     expect(payload.sampleRows).toHaveLength(10);
+    // details 通道：全量行 + SQL，供前端结构化表格（不进模型载荷）
+    expect(result.details.rows).toHaveLength(30);
+    expect(result.details.sql).toBe('SELECT 1');
+    expect(result.details.rowCount).toBe(30);
   });
 
   it('后端 4xx/5xx：ok=false 带错误信息', async () => {
