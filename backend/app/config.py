@@ -103,6 +103,13 @@ class Settings(BaseSettings):
     AGENT_SECRET_KEY: str | None = Field(None, min_length=8)
     AUDIT_USER_ID: str = "UADMIN"
 
+    # --- Pi 编排层（M1）---
+    # Pi orchestrator（Node sidecar）地址；空 = 智能助手关闭（/api/assistant 返回 503 优雅降级）
+    PI_ORCHESTRATOR_URL: str | None = None
+    # Python ↔ Pi 双向调用的内部令牌（两者必须一致；未配置 = internal 接口拒绝一切调用）
+    INTERNAL_API_TOKEN: str | None = None
+    PI_TOOL_TIMEOUT_SECONDS: int = Field(120, ge=1, le=600)
+
     # --- 用户认证（AUTH_ENABLED=true 时聊天/会话/传统查询均需登录）---
     AUTH_ENABLED: bool = False
     AUTH_SECRET: str | None = Field(None, min_length=16)  # 会话 Cookie 签名密钥

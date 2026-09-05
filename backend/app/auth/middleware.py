@@ -10,8 +10,8 @@ import json
 
 from app.auth.tokens import verify_token
 
-# 无需登录即可访问的路径前缀
-_EXEMPT_PREFIXES = ("/api/auth/", "/api/health", "/health", "/docs", "/openapi.json")
+# 无需登录即可访问的路径前缀（/internal 有 internal token 自保护）
+_EXEMPT_PREFIXES = ("/api/auth/", "/api/health", "/health", "/docs", "/openapi.json", "/internal")
 
 
 class AuthMiddleware:
