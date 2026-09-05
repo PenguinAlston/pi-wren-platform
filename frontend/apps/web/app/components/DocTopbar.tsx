@@ -5,7 +5,10 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 function resolveTitle(pathname: string, search: URLSearchParams): { title: string; crumb: string } {
   if (pathname === '/') {
-    return { title: '总览', crumb: '导航 / 总览' };
+    return { title: '智能助手', crumb: '导航 / 智能助手' };
+  }
+  if (pathname === '/chat') {
+    return { title: '经典问数', crumb: '业务查询 / 经典问数' };
   }
   if (pathname === '/query') {
     const map: Record<string, string> = { contract: '契约查询', preserve: '保全查询', claim: '理赔查询' };

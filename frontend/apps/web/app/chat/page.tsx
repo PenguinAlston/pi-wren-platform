@@ -10,7 +10,7 @@ import SessionSidebar, { type SessionSummary } from './components/SessionSidebar
 import { ThinkingStream } from './components/ThinkingStream';
 import { Markdown } from './components/Markdown';
 import { MessageFeedback } from './components/MessageFeedback';
-import type { FeedbackValue } from './components/chat-utils';
+import { parseSseFrames, type FeedbackValue } from './components/chat-utils';
 
 interface AgentInfo {
   id: string;
@@ -32,11 +32,6 @@ interface ChatMessageItem {
   feedback?: FeedbackValue;
 }
 
-interface SseFrame {
-  event: string;
-  data: string;
-}
-
 const EXAMPLES: Record<string, string[]> = {
   insurance: [
     '各险种的赔付率如何？',
@@ -46,21 +41,6 @@ const EXAMPLES: Record<string, string[]> = {
     '核保结果如何？',
   ],
 };
-
-/** 解析 SSE 文本流为帧列表。 */
-function parseSseFrames(buffer: string): { frames: SseFrame[]; rest: string } {
-  const parts = buffer.split('\n\n');
-  const rest = parts.pop() ?? '';
-  const frames: SseFrame[] = [];
-  for (const part of parts) {
-    const event = part.match(/^event: (.+)$/m)?.[1];
-    const data = part.match(/^data: (.+)$/m)?.[1];
-    if (event && data !== undefined) {
-      frames.push({ event, data });
-    }
-  }
-  return { frames, rest };
-}
 
 let messageSeq = 0;
 function nextMessageId(): string {

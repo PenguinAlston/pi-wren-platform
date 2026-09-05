@@ -12,7 +12,7 @@ interface MenuItem {
 }
 
 const MENU: MenuItem[] = [
-  { href: '/', label: '总览', group: '导航', isActive: (p) => p === '/' },
+  { href: '/', label: '智能助手', group: '导航', isActive: (p) => p === '/' },
   {
     href: '/query?m=contract',
     label: '契约查询',
@@ -31,7 +31,7 @@ const MENU: MenuItem[] = [
     group: '业务查询',
     isActive: (p, s) => p === '/query' && s.get('m') === 'claim',
   },
-  { href: '/chat', label: 'AI 智能问答', group: '业务查询', isActive: (p) => p === '/chat' },
+  { href: '/chat', label: '经典问数', group: '业务查询', isActive: (p) => p === '/chat' },
   { href: '/agents', label: '自定义 Agent', group: '系统管理', isActive: (p) => p === '/agents' },
   { href: '/users', label: '用户管理', group: '系统管理', isActive: (p) => p === '/users' },
 ];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectChart, formatCell, nextFeedback, toCsv } from './chat-utils';
+import { detectChart, formatCell, nextFeedback, parseSseFrames, toCsv } from './chat-utils';
 
 describe('nextFeedback', () => {
   it('sets rating on first click', () => {
@@ -66,5 +66,24 @@ describe('formatCell', () => {
     expect(formatCell('02')).toBe('02');
     expect(formatCell('P20240001')).toBe('P20240001');
     expect(formatCell(null)).toBe('');
+  });
+});
+
+describe('parseSseFrames', () => {
+  it('splits complete frames and keeps the trailing partial buffer', () => {
+    const buffer =
+      'event: plan\ndata: {"id":"1"}\n\nevent: tool_call\ndata: {"id":"2"}\n\nevent: ans';
+    const { frames, rest } = parseSseFrames(buffer);
+    expect(frames).toEqual([
+      { event: 'plan', data: '{"id":"1"}' },
+      { event: 'tool_call', data: '{"id":"2"}' },
+    ]);
+    expect(rest).toBe('event: ans');
+  });
+
+  it('ignores frames missing event or data lines', () => {
+    const { frames, rest } = parseSseFrames('event: x\ndata: 1\n\n:data only\n\nfoo\n\n');
+    expect(frames).toEqual([{ event: 'x', data: '1' }]);
+    expect(rest).toBe('');
   });
 });

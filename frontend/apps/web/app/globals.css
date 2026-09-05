@@ -2645,6 +2645,163 @@ pre.code,
 }
 
 /* =========================================================
+   对话式首页（M3）：会话列表 + 对话流 + 功能面板
+   ========================================================= */
+
+.home-layout {
+  display: flex;
+  gap: 16px;
+  height: calc(100dvh - 152px);
+  min-height: 480px;
+}
+
+.home-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--pw-surface);
+  border-radius: var(--pw-radius-lg);
+  min-width: 0;
+  min-height: 0;
+  box-shadow: var(--pw-shadow-sm);
+  overflow: hidden;
+  position: relative;
+}
+
+/* 落地态：问候语居中，输入框尚未对话时上浮 */
+.home-main:not(.in-conversation) .chat-messages {
+  background:
+    radial-gradient(560px 260px at 50% -30px, rgba(25, 180, 157, 0.1), transparent 70%),
+    var(--pw-bg);
+}
+
+.home-landing {
+  position: absolute;
+  top: 26%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 0 24px;
+  pointer-events: none;
+}
+
+.home-greeting {
+  margin: 0 0 8px;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+  color: var(--pw-text);
+  text-wrap: balance;
+}
+
+.home-tagline {
+  margin: 0;
+  font-size: 15px;
+  color: var(--pw-text-2);
+}
+
+/* 右侧功能面板 */
+.home-rail {
+  flex: 0 0 232px;
+  overflow-y: auto;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.home-rail-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--pw-text-3);
+  padding: 0 4px;
+}
+
+.home-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--pw-surface);
+  border: 1px solid var(--pw-border);
+  border-radius: var(--pw-radius);
+  padding: 12px 14px;
+  color: var(--pw-text);
+  text-decoration: none;
+  transition: all var(--pw-duration) var(--pw-ease);
+}
+
+.panel-card:hover {
+  border-color: var(--pw-primary);
+  background: var(--pw-primary-state);
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: var(--pw-shadow-sm);
+}
+
+.panel-card-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.panel-card-desc {
+  font-size: 12px;
+  color: var(--pw-text-2);
+}
+
+.home-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-example-chip {
+  text-align: left;
+  border: 1px solid var(--pw-border);
+  background: var(--pw-surface);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--pw-text-2);
+  cursor: pointer;
+  transition: all var(--pw-duration) var(--pw-ease);
+}
+
+.home-example-chip:hover:not(:disabled) {
+  border-color: var(--pw-primary);
+  color: var(--pw-primary-deep);
+  background: var(--pw-primary-state);
+}
+
+.home-example-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+  .home-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .home-layout {
+    flex-direction: column;
+    height: auto;
+  }
+  .home-main {
+    height: 70vh;
+  }
+}
+
+/* =========================================================
    响应式
    ========================================================= */
 
