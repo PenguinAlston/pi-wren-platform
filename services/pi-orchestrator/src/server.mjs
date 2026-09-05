@@ -38,7 +38,7 @@ function buildModel(config) {
   });
   const models = createModels({ credentials });
   models.setProvider(provider);
-  return models.getModel('pi-llm', config.openaiModel);
+  return { model: models.getModel('pi-llm', config.openaiModel), streamFn: models.streamSimple.bind(models) };
 }
 
 /** 生产 createAgent：真 pi Agent（0.83 API，见 docs/spikes/pi-agent）。 */
@@ -59,13 +59,16 @@ export function createAppService({ config, store, createAgent = null }) {
   if (createAgent) {
     return createAgentService({ config, model: 'stub', tools: [createAskDataTool(config)], store, createAgent });
   }
-  const credentialsModel = buildModel(config);
+  const { model, streamFn } = buildModel(config);
   const service = createAgentService({
     config,
-    model: credentialsModel,
-    tools: [createAskDataTool(config)],
+    model,
+    // 每次请求注入当前用户身份（internal 路由按此反查权限）
+    toolsFactory: ({ userKey }) => [
+      createAskDataTool({ ...config, identityHeaders: { 'x-user-id': userKey } }),
+    ],
     store,
-    createAgent: (args) => createPiAgent({ ...args, streamFn: undefined }),
+    createAgent: (args) => createPiAgent({ ...args, streamFn }),
   });
   return { service };
 }
@@ -161,7 +164,7 @@ export function createHandler({ config, store, service }) {
           res.write(sseFrame('done', {
             sessionId: pathSessionId,
             answer: result.answer,
-            sql: null,
+            sql: result.sql ?? null,
             data: result.data ?? null,
             events: result.events,
             toolCalls: [],

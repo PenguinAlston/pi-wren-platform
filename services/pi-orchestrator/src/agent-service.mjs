@@ -19,8 +19,8 @@ function buildSystemPrompt(history) {
   return `${lines.join('\n')}\n\n${SYSTEM_PROMPT_BASE}`;
 }
 
-/** 工具包装：超限时返回引导收尾的错误结果，不真调后端。 */
-function guardToolCall(tool, guardrails) {
+/** 工具包装：超限时返回引导收尾的错误结果；ask_data 的结构化结果捕获进 sink（供 done 帧）。 */
+function guardToolCall(tool, guardrails, sink) {
   return {
     ...tool,
     execute: async (id, params) => {
@@ -32,7 +32,18 @@ function guardToolCall(tool, guardrails) {
           }],
         };
       }
-      return tool.execute(id, params);
+      const result = await tool.execute(id, params);
+      try {
+        const payload = JSON.parse(result.content?.[0]?.text ?? '');
+        if (payload.ok && payload.sql !== undefined) {
+          sink.sql = payload.sql;
+          sink.data = payload.sampleRows ?? null;
+          sink.rowCount = payload.rowCount ?? 0;
+        }
+      } catch {
+        // 非 JSON 工具结果忽略
+      }
+      return result;
     },
   };
 }
@@ -42,12 +53,13 @@ function guardToolCall(tool, guardrails) {
  * createAgent 注入：({ systemPrompt, model, tools, sessionId, onPiEvent }) =>
  *   { prompt(q), subscribe(fn), abort? }——生产用真 pi Agent，测试用 stub。
  */
-export function createAgentService({ config, model, tools, store, createAgent }) {
+export function createAgentService({ config, model, tools = [], toolsFactory = null, store, createAgent }) {
   return {
     async run({ userKey, sessionId, question, onUiEvent }) {
       const guardrails = createGuardrails(config);
       const history = await store.history(userKey, sessionId, config.historyTurns);
       const state = { toolCallsStarted: 0, text: '' };
+      const sink = { sql: null, data: null, rowCount: 0 };
       const events = [];
 
       const push = (event) => {
@@ -59,7 +71,8 @@ export function createAgentService({ config, model, tools, store, createAgent })
       const agent = createAgent({
         systemPrompt: buildSystemPrompt(history),
         model,
-        tools: tools.map((tool) => guardToolCall(tool, guardrails)),
+        // toolsFactory：按请求上下文（userKey）生成带身份的工具；tools 为静态工具（测试用）
+        tools: (toolsFactory ? toolsFactory({ userKey }) : tools).map((tool) => guardToolCall(tool, guardrails, sink)),
         sessionId,
         onPiEvent: (e) => {
           for (const event of mapPiEvent(e, state)) push(event);
@@ -90,7 +103,14 @@ export function createAgentService({ config, model, tools, store, createAgent })
         at: new Date().toISOString(),
       });
 
-      return { answer, events, durationMs: guardrails.elapsedMs, toolCalls: guardrails.toolCalls };
+      return {
+        answer,
+        events,
+        durationMs: guardrails.elapsedMs,
+        toolCalls: guardrails.toolCalls,
+        sql: sink.sql,
+        data: sink.data,
+      };
     },
   };
 }

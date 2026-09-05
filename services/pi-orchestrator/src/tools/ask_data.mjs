@@ -14,6 +14,7 @@ export function createAskDataTool({
   timeoutMs = 120_000,
   sampleRowLimit = 10,
   fetchImpl = fetch,
+  identityHeaders = {},
 }) {
   return {
     name: 'ask_data',
@@ -30,7 +31,7 @@ export function createAskDataTool({
       try {
         const response = await fetchImpl(`${backendUrl}/internal/agent/insurance/chat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-internal-token': internalToken },
+          headers: { 'Content-Type': 'application/json', 'x-internal-token': internalToken, ...identityHeaders },
           body: JSON.stringify({ message: params.question }),
           signal: controller.signal,
         });

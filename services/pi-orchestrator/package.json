@@ -7,7 +7,7 @@
     "node": ">=22.19"
   },
   "scripts": {
-    "start": "node src/server.mjs",
+    "start": "node --env-file-if-exists=../../.env src/server.mjs",
     "test": "vitest run"
   },
   "dependencies": {
