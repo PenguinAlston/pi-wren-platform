@@ -83,16 +83,29 @@ class WrenEngineService:
         self._engines: list = [self._build_engine() for _ in range(self._pool_size)]
         self._rr_index = 0
         self._rr_lock = threading.Lock()
-        # WrenMemory 语义检索（embedding 模型运行时约 1GB 内存）：小内存部署可经
-        # WREN_MEMORY_ENABLED=false 关闭，fetch_context 降级为 MDL 直读上下文
-        if settings.WREN_MEMORY_ENABLED:
-            from wren.memory import WrenMemory
+        # 语义检索三级优先：远程 embedding API（零本地模型内存）→ 本地 WrenMemory
+        # （embedding 模型约 1GB 内存，dev 用）→ MDL 直读（fetch_context 内降级）
+        self._retriever = None
+        if settings.WREN_EMBEDDING_API_KEY and settings.WREN_EMBEDDING_API_BASE:
+            from app.semantic.embedding_retriever import EmbeddingRetriever
 
-            self._memory: WrenMemory | None = WrenMemory(str(project_dir))
-        else:
+            self._retriever = EmbeddingRetriever(
+                project_dir, self._manifest_dict,
+                api_base=settings.WREN_EMBEDDING_API_BASE,
+                api_key=settings.WREN_EMBEDDING_API_KEY,
+                model=settings.WREN_EMBEDDING_MODEL,
+            )
             self._memory = None
-        logger.info("WrenEngineService 初始化完成: {}（引擎池 x{}，memory={}）",
-                    project_dir, self._pool_size, "on" if self._memory else "off")
+        else:
+            if settings.WREN_MEMORY_ENABLED:
+                from wren.memory import WrenMemory
+
+                self._memory: WrenMemory | None = WrenMemory(str(project_dir))
+            else:
+                self._memory = None
+        mode = "remote-embedding" if self._retriever else ("local-memory" if self._memory else "mdl-direct")
+        logger.info("WrenEngineService 初始化完成: {}（引擎池 x{}，检索={}）",
+                    project_dir, self._pool_size, mode)
 
     def _build_engine(self):
         return self._engine_cls(self._manifest_str, "postgres", self._connection_info,
@@ -109,17 +122,24 @@ class WrenEngineService:
     def fetch_context(self, question: str) -> str:
         """检索与问题相关的语义上下文（表/列/相似查询）。
 
-        memory 关闭（或检索失败）时降级：MDL 直读 schema 摘要 → instructions。
+        降级链：远程 embedding 检索 / 本地 WrenMemory → MDL 直读 schema 摘要 → instructions。
         """
-        if self._memory is None:
-            return self._mdl_light_context()
-        try:
-            result = self._memory.get_context(manifest=self._manifest_dict, query=question)
-            schema_text = result.get("schema", "") if isinstance(result, dict) else str(result)
-            return schema_text.strip() or self._mdl_light_context()
-        except Exception as e:
-            logger.warning("get_context 失败，降级为 MDL 直读: {}", e)
-            return self._mdl_light_context()
+        if self._retriever is not None:
+            try:
+                context = self._retriever.search(question)
+                return context.strip() or self._mdl_light_context()
+            except Exception as e:
+                logger.warning("远程 embedding 检索失败，降级为 MDL 直读: {}", e)
+                return self._mdl_light_context()
+        if self._memory is not None:
+            try:
+                result = self._memory.get_context(manifest=self._manifest_dict, query=question)
+                schema_text = result.get("schema", "") if isinstance(result, dict) else str(result)
+                return schema_text.strip() or self._mdl_light_context()
+            except Exception as e:
+                logger.warning("get_context 失败，降级为 MDL 直读: {}", e)
+                return self._mdl_light_context()
+        return self._mdl_light_context()
 
     def _mdl_light_context(self) -> str:
         """无向量检索的轻量语义上下文：MDL 里的表/列/描述，纯 JSON 解析零 ML。"""

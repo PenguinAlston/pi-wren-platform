@@ -77,6 +77,12 @@ class Settings(BaseSettings):
     # WrenMemory 语义检索（embedding 模型，运行时约 1GB 内存）：小内存服务器可关闭，
     # 关闭后语义上下文直接从 MDL 生成（表/列/注释），业务规则 knowledge/rules 仍然生效
     WREN_MEMORY_ENABLED: bool = True
+    # 远程 embedding 语义检索（优先于本地 WrenMemory，零本地模型内存）：
+    # OpenAI 兼容 /embeddings 端点，如 DashScope https://dashscope.aliyuncs.com/compatible-mode/v1
+    # 配置了 Key 即启用；检索失败自动降级为 MDL 直读
+    WREN_EMBEDDING_API_BASE: str | None = None
+    WREN_EMBEDDING_API_KEY: str | None = None
+    WREN_EMBEDDING_MODEL: str = "text-embedding-v3"
 
     # --- AI 查询硬约束 ---
     # 行数上限：防"列出全部保单"类查询打爆内存/前端；达到上限时结果会被截断并提示
