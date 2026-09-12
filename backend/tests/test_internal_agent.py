@@ -87,3 +87,97 @@ async def test_internal_agent_chat_persists_with_identity():
     assert captured["user_id"] == "U1"
     assert captured["org_access"] == OrgAccess("org", "ORG1")
     assert response.status_code == 200
+
+# --- M2: traditional_query / graph_query internal 端点 ---
+from app.routers.internal import internal_graph_neighbors, internal_graph_overview, internal_traditional_query
+
+
+class _FakeInsurance:
+    def __init__(self):
+        self.captured = None
+
+    async def query_contract(self, cond, page, page_size, sort_by=None, sort_order=None):
+        self.captured = {"cond": cond, "page": page, "pageSize": page_size}
+        return {"items": [{"policy_no": "P1"}], "total": 1, "page": page, "pageSize": page_size, "totalPages": 1}
+
+
+def _state_with_insurance(user=_USER):
+    state = _state(user=user)
+    state.insurance = _FakeInsurance()
+    return state
+
+
+async def test_internal_traditional_query_ok_and_org_override():
+    state = _state_with_insurance()
+    request = _request({"x-user-id": "U1", "x-internal-token": "tok"}, state)
+
+    async def json_body():
+        return {"conditions": {"policyNo": "P1"}, "page": 2, "pageSize": 20}
+
+    request.json = json_body
+    response = await internal_traditional_query("contract", request)
+    assert response.status_code == 200
+    assert state.insurance.captured["cond"]["orgCode"] == "ORG1"  # org 覆盖防伪造
+    assert state.insurance.captured["page"] == 2
+
+
+async def test_internal_traditional_query_deny_403():
+    deny_user = SimpleNamespace(**{**_USER.__dict__, "org_id": None})
+    state = _state_with_insurance(user=deny_user)
+    request = _request({"x-user-id": "U1", "x-internal-token": "tok"}, state)
+
+    async def json_body():
+        return {}
+
+    request.json = json_body
+    response = await internal_traditional_query("contract", request)
+    assert response.status_code == 403
+
+
+async def test_internal_traditional_query_bad_module():
+    state = _state_with_insurance()
+    request = _request({"x-user-id": "U1", "x-internal-token": "tok"}, state)
+
+    async def json_body():
+        return {}
+
+    request.json = json_body
+    response = await internal_traditional_query("orders", request)
+    assert response.status_code == 400
+
+
+async def test_internal_graph_overview(monkeypatch):
+    from app.graph import service as graph_service
+    node_rows, edge_rows = [], []
+    async def fake_fetch(pool):
+        return node_rows, edge_rows
+    monkeypatch.setattr(graph_service, "fetch_raw_graph", fake_fetch)
+    state = _state_with_insurance()
+    state.pool = None
+    request = _request({"x-user-id": "U1", "x-internal-token": "tok"}, state)
+    response = await internal_graph_overview(request)
+    assert response.status_code == 200
+
+
+async def test_internal_graph_unavailable_503(monkeypatch):
+    from app.graph import service as graph_service
+
+    def boom(pool):
+        raise RuntimeError("AGE not installed")
+
+    monkeypatch.setattr(graph_service, "fetch_raw_graph", boom)
+    state = _state_with_insurance()
+    state.pool = None
+    state.pool = None
+    request = _request({"x-user-id": "U1", "x-internal-token": "tok"}, state)
+    response = await internal_graph_overview(request)
+    assert response.status_code == 503
+
+
+async def test_internal_graph_neighbors_bad_label(monkeypatch):
+    from app.graph import service as graph_service
+    monkeypatch.setattr(graph_service, "fetch_raw_graph", lambda pool: ([], []))
+    state = _state_with_insurance()
+    request = _request({"x-user-id": "U1", "x-internal-token": "tok"}, state)
+    response = await internal_graph_neighbors(request, "Hacker", "123")
+    assert response.status_code == 400

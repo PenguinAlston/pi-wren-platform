@@ -12,6 +12,8 @@ import { loadConfig } from './config.mjs';
 import { sseFrame, uiEvent } from './events.mjs';
 import { createSessionStore } from './sessions.mjs';
 import { createAskDataTool } from './tools/ask_data.mjs';
+import { createTraditionalQueryTool } from './tools/traditional_query.mjs';
+import { createGraphQueryTool } from './tools/graph_query.mjs';
 import { createAgentService } from './agent-service.mjs';
 
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -64,9 +66,15 @@ export function createAppService({ config, store, createAgent = null }) {
     config,
     model,
     // 每次请求注入当前用户身份（internal 路由按此反查权限）
-    toolsFactory: ({ userKey }) => [
-      createAskDataTool({ ...config, identityHeaders: { 'x-user-id': userKey } }),
-    ],
+    toolsFactory: ({ userKey }) => {
+      const identity = { 'x-user-id': userKey };
+      const common = { ...config, identityHeaders: identity };
+      return [
+        createAskDataTool(common),
+        createTraditionalQueryTool(common),
+        createGraphQueryTool(common),
+      ];
+    },
     store,
     createAgent: (args) => createPiAgent({ ...args, streamFn }),
   });
