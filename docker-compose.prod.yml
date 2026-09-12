@@ -14,7 +14,13 @@ name: pi-wren-prod
 
 services:
   postgres:
-    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:18.4-alpine
+    # 官方 postgres:18.4-alpine + Apache AGE 1.7.0 编译层（图谱能力）；
+    # shared_preload_libraries 使所有会话预载 age，业务表数据卷不变
+    build:
+      context: .
+      dockerfile: infra/age-postgres.Dockerfile
+    image: pi-wren-postgres-age:18.4
+    command: ["postgres", "-c", "shared_preload_libraries=age"]
     environment:
       POSTGRES_USER: ${DB_USER:-demo}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-demo}

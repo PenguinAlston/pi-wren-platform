@@ -30,6 +30,10 @@ _EDGES_CYPHER = f"""
 async def fetch_raw_graph(pool: asyncpg.Pool) -> tuple[list[tuple], list[tuple]]:
     """全量节点 + 边原始行（label, gid, props / src_label, src_gid, rel, dst_label, dst_gid, props）。"""
     async with pool.acquire() as conn:
+        # AGE 会话初始化：加载扩展动态库并把 ag_catalog 纳入 search_path
+        # （否则未限定名 agtype 报 type does not exist）；LOAD 不能在事务块内，单语句执行即可
+        await conn.execute("LOAD 'age';")
+        await conn.execute("SET search_path = ag_catalog, public;")
         node_rows = await conn.fetch(
             f"SELECT * FROM ag_catalog.cypher('{GRAPH_NAME}', $cy${_NODES_CYPHER}$cy$) "
             "AS (label agtype, gid agtype, props agtype)")
