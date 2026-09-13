@@ -53,7 +53,7 @@
         <mxCell id="web-users" value="用户管理（机构分配）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
           <mxGeometry x="440" y="250" width="240" height="35" as="geometry" />
         </mxCell>
-        <mxCell id="web-chart" value="表格 / 图表可视化" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
+        <mxCell id="web-chart" value="知识图谱可视化" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
           <mxGeometry x="690" y="250" width="240" height="35" as="geometry" />
         </mxCell>
 
@@ -67,10 +67,10 @@
         <mxCell id="pi-loop" value="Agent 循环" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
           <mxGeometry x="190" y="340" width="130" height="35" as="geometry" />
         </mxCell>
-        <mxCell id="pi-ask" value="ask_data 工具" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
+        <mxCell id="pi-ask" value="数据工具 ×3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
           <mxGeometry x="330" y="340" width="130" height="35" as="geometry" />
         </mxCell>
-        <mxCell id="pi-session" value="会话存储 JSONL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
+        <mxCell id="pi-session" value="会话存储 PG/JSONL" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
           <mxGeometry x="470" y="340" width="130" height="35" as="geometry" />
         </mxCell>
         <mxCell id="pi-guard" value="护栏·超时收尾" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=14;" vertex="1" parent="1">
@@ -93,7 +93,7 @@
         <mxCell id="api-sse" value="assistant 代理（SSE·熔断）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=13;" vertex="1" parent="1">
           <mxGeometry x="200" y="475" width="170" height="35" as="geometry" />
         </mxCell>
-        <mxCell id="api-internal" value="internal API（token）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=13;" vertex="1" parent="1">
+        <mxCell id="api-internal" value="internal API（问数/清单/图谱）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=13;" vertex="1" parent="1">
           <mxGeometry x="380" y="475" width="170" height="35" as="geometry" />
         </mxCell>
         <mxCell id="api-auth" value="认证中间件" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#999999;fontSize=13;" vertex="1" parent="1">
