@@ -62,3 +62,4 @@ backend/app/data/__pycache__/
 backend/app/data/**/*.pyc
 backend/torch_cpu.whl
 infra/apache-age-src.tar.gz
+infra/ssh_run.py
