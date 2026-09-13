@@ -3012,11 +3012,11 @@ pre.code,
   font-variant-numeric: tabular-nums;
 }
 
-/* 知识图谱页 */
+/* 知识图谱页（Neo4j Browser 风格：点阵画布 + 彩色节点 + 图例芯片 + 详情卡） */
 .graph-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   height: calc(100dvh - 152px);
   min-height: 480px;
 }
@@ -3035,11 +3035,322 @@ pre.code,
   flex-wrap: wrap;
 }
 
-.graph-canvas {
+.graph-stats b {
+  color: var(--pw-text);
+  font-weight: 600;
+}
+
+.graph-stage {
+  position: relative;
   flex: 1;
   min-height: 380px;
-  background: var(--pw-surface);
+  overflow: hidden;
   border: 1px solid var(--pw-border);
   border-radius: var(--pw-radius-lg);
   box-shadow: var(--pw-shadow-sm);
+  background-color: #fbfdfc;
+  background-image: radial-gradient(rgba(96, 116, 129, 0.22) 1px, transparent 1.2px);
+  background-size: 22px 22px;
+  background-position: 11px 11px;
+}
+
+.graph-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  text-align: center;
+}
+
+/* 图例：节点标签芯片 + 关系类型芯片，点击隐藏/显示 */
+.graph-legend {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  max-width: min(340px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--pw-border);
+  border-radius: 12px;
+  box-shadow: var(--pw-shadow-sm);
+}
+
+.graph-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.graph-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--pw-surface-2);
+  color: var(--pw-text-2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.graph-chip:hover {
+  background: var(--pw-surface-3);
+}
+
+.graph-chip i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.graph-chip span {
+  color: var(--pw-text-3);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-chip.off {
+  opacity: 0.42;
+}
+
+.graph-chip.off span {
+  text-decoration: line-through;
+}
+
+.graph-legend-row.rels {
+  gap: 4px 10px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--pw-border);
+}
+
+.graph-rel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--pw-text-3);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.graph-rel code {
+  font-family: var(--pw-mono);
+  font-size: 10.5px;
+}
+
+.graph-rel span {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-rel:hover code {
+  color: var(--pw-text);
+}
+
+.graph-rel.off {
+  opacity: 0.4;
+}
+
+.graph-rel.off code {
+  text-decoration: line-through;
+}
+
+/* 右下角缩放控件 */
+.graph-zoomer {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.graph-zoomer button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--pw-border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--pw-text-2);
+  box-shadow: var(--pw-shadow-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.graph-zoomer button:hover {
+  background: var(--pw-surface-2);
+}
+
+/* 节点详情卡（Neo4j 式属性面板） */
+.graph-card {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 3;
+  width: min(300px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--pw-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 35, 30, 0.14);
+}
+
+.graph-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.graph-card-head i {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--pw-border);
+}
+
+.graph-card-head code {
+  flex: none;
+  font-family: var(--pw-mono);
+  font-size: 11px;
+  color: var(--pw-text-3);
+}
+
+.graph-card-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--pw-text);
+}
+
+.graph-card-close {
+  flex: none;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  color: var(--pw-text-3);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.graph-card-close:hover {
+  color: var(--pw-text);
+}
+
+.graph-card-props {
+  max-height: 180px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.graph-prop {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--pw-surface-3);
+  font-size: 12px;
+}
+
+.graph-prop:last-child {
+  border-bottom: 0;
+}
+
+.graph-prop span {
+  flex: none;
+  color: var(--pw-text-3);
+  font-family: var(--pw-mono);
+  font-size: 11px;
+}
+
+.graph-prop b {
+  font-weight: 500;
+  color: var(--pw-text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-all;
+}
+
+.graph-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 加载遮罩 */
+.graph-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  background: rgba(251, 253, 252, 0.65);
+  backdrop-filter: blur(2px);
+}
+
+.graph-loading i {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--pw-primary-container);
+  border-top-color: var(--pw-primary);
+  animation: graph-spin 0.8s linear infinite;
+}
+
+@keyframes graph-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .graph-page {
+    height: calc(100dvh - 132px);
+    min-height: 420px;
+  }
+
+  .graph-legend {
+    max-width: calc(100% - 24px);
+  }
+
+  /* 小屏隐藏关系类型芯片行，避免图例占据过多画布 */
+  .graph-legend-row.rels {
+    display: none;
+  }
+
+  .graph-card {
+    width: calc(100% - 24px);
+  }
+
+  .graph-card-props {
+    max-height: 140px;
+  }
 }
