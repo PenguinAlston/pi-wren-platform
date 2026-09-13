@@ -12,9 +12,12 @@
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.83.0",
-    "@earendil-works/pi-ai": "0.83.0"
+    "@earendil-works/pi-ai": "0.83.0",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "ajv": "^8.20.0",
     "vitest": "^3.2.0"
   }
 }

@@ -3011,3 +3011,35 @@ pre.code,
   margin-left: 6px;
   font-variant-numeric: tabular-nums;
 }
+
+/* 知识图谱页 */
+.graph-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: calc(100dvh - 152px);
+  min-height: 480px;
+}
+
+.graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.graph-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.graph-canvas {
+  flex: 1;
+  min-height: 380px;
+  background: var(--pw-surface);
+  border: 1px solid var(--pw-border);
+  border-radius: var(--pw-radius-lg);
+  box-shadow: var(--pw-shadow-sm);
+}

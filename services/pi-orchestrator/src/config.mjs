@@ -16,6 +16,15 @@ export function loadConfig(env = process.env) {
     maxDurationMs: Number(env.PI_MAX_DURATION_MS ?? 175_000),
     toolTimeoutMs: Number(env.PI_TOOL_TIMEOUT_MS ?? 120_000),
     historyTurns: 3,
+    // 会话存储后端：jsonl（本地开发默认）| pg（生产，多副本共享）
+    sessionBackend: env.PI_SESSION_BACKEND ?? 'jsonl',
+    db: {
+      host: env.DB_HOST ?? 'postgres',
+      port: Number(env.DB_PORT ?? 5432),
+      user: env.DB_USER ?? 'demo',
+      password: env.DB_PASSWORD ?? 'demo',
+      database: env.DB_NAME ?? 'piwren',
+    },
   };
   if (!config.internalToken) throw new Error('INTERNAL_API_TOKEN is required');
   if (!config.openaiApiKey) throw new Error('OPENAI_API_KEY is required');

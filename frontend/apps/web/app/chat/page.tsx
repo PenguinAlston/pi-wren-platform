@@ -196,6 +196,16 @@ export default function ChatPage() {
               });
               setActiveSessionId(run.sessionId);
               void loadSessions();
+            } else if (frame.event === 'answer_delta') {
+              // Pi 模式 token 级流式：增量拼接（done 帧以最终全文覆盖）
+              const { delta } = JSON.parse(frame.data) as { delta: string };
+              setMessages((prev) =>
+                prev.map((item) =>
+                  item.id === assistantId
+                    ? { ...item, content: (item.content ?? '') + delta }
+                    : item,
+                ),
+              );
             } else {
               const event = JSON.parse(frame.data) as AgentEvent;
               setMessages((prev) =>
@@ -442,8 +452,8 @@ export default function ChatPage() {
                     <ThinkingStream events={message.events} loading={message.loading ?? false} />
                   ) : null}
 
-                  {/* loading 且还没收到事件时，显示跳动点 */}
-                  {message.loading && (!message.events || message.events.length === 0) ? (
+                  {/* loading 且内容未开始流式时，显示跳动点 */}
+                  {message.loading && !message.content ? (
                     <span className="chat-typing">
                       <i />
                       <i />
@@ -451,10 +461,12 @@ export default function ChatPage() {
                     </span>
                   ) : null}
 
+                  {/* 流式期间实时渲染增量内容（Pi 模式 answer_delta） */}
+                  {message.content ? <Markdown content={message.content} /> : null}
+
                   {/* 非 loading 时显示回答内容 */}
                   {!message.loading ? (
                     <>
-                      {message.content ? <Markdown content={message.content} /> : null}
                       {message.error ? (
                         <Button type="link" size="small" onClick={() => void retryLast()}>
                           重试

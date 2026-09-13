@@ -68,7 +68,7 @@ function guardToolCall(tool, guardrails, sink) {
  */
 export function createAgentService({ config, model, tools = [], toolsFactory = null, store, createAgent }) {
   return {
-    async run({ userKey, sessionId, question, onUiEvent }) {
+    async run({ userKey, sessionId, question, onUiEvent, onDelta }) {
       const guardrails = createGuardrails(config);
       const history = await store.history(userKey, sessionId, config.historyTurns);
       const state = { toolCallsStarted: 0, text: '' };
@@ -88,6 +88,11 @@ export function createAgentService({ config, model, tools = [], toolsFactory = n
         tools: (toolsFactory ? toolsFactory({ userKey }) : tools).map((tool) => guardToolCall(tool, guardrails, sink)),
         sessionId,
         onPiEvent: (e) => {
+          // LLM 文本增量：实时下发（token 级流式），不进 trace 事件列表
+          if (e.type === 'message_update' && e.assistantMessageEvent?.type === 'text_delta') {
+            const delta = e.assistantMessageEvent.delta ?? '';
+            if (delta) onDelta?.(delta);
+          }
           for (const event of mapPiEvent(e, state)) push(event);
         },
       });

@@ -32,6 +32,7 @@ const MENU: MenuItem[] = [
     isActive: (p, s) => p === '/query' && s.get('m') === 'claim',
   },
   { href: '/chat', label: '经典问数', group: '业务查询', isActive: (p) => p === '/chat' },
+  { href: '/graph', label: '知识图谱', group: '业务查询', isActive: (p) => p === '/graph' },
   { href: '/agents', label: '自定义 Agent', group: '系统管理', isActive: (p) => p === '/agents' },
   { href: '/users', label: '用户管理', group: '系统管理', isActive: (p) => p === '/users' },
 ];

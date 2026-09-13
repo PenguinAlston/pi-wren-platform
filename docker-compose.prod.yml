@@ -92,7 +92,7 @@ services:
     mem_limit: 320m
     restart: unless-stopped
 
-  # Pi 编排层（M1）：Agent 循环 + ask_data 工具，仅容器网络内部访问
+  # Pi 编排层（M1）：Agent 循环 + 工具集，仅容器网络内部访问
   pi-orchestrator:
     build: ./services/pi-orchestrator
     environment:
@@ -101,11 +101,18 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL}
       OPENAI_MODEL: ${OPENAI_MODEL}
+      # 会话落 Postgres（多副本共享；本地开发默认 jsonl 不受影响）
+      PI_SESSION_BACKEND: pg
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-demo}
+      DB_PASSWORD: ${DB_PASSWORD:-demo}
+      DB_NAME: ${DB_NAME:-piwren}
     volumes:
       - pi_sessions:/app/data
     depends_on:
-      backend:
-        condition: service_started
+      postgres:
+        condition: service_healthy
     mem_limit: 256m
     restart: unless-stopped
 

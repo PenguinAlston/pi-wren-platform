@@ -10,6 +10,9 @@ function resolveTitle(pathname: string, search: URLSearchParams): { title: strin
   if (pathname === '/chat') {
     return { title: '经典问数', crumb: '业务查询 / 经典问数' };
   }
+  if (pathname === '/graph') {
+    return { title: '知识图谱', crumb: '业务查询 / 知识图谱' };
+  }
   if (pathname === '/query') {
     const map: Record<string, string> = { contract: '契约查询', preserve: '保全查询', claim: '理赔查询' };
     const moduleName = map[search.get('m') ?? ''];

@@ -204,6 +204,14 @@ export default function AssistantHome() {
               const detail = payload.error ?? payload.label ?? '执行失败';
               patchMessage(assistantId, { content: detail, error: true, loading: false });
               setError(detail);
+            } else if (frame.event === 'answer_delta') {
+              // token 级流式：增量拼接回答内容（done 帧会用最终全文覆盖）
+              const { delta } = JSON.parse(frame.data) as { delta: string };
+              setMessages((prev) =>
+                prev.map((item) =>
+                  item.id === assistantId ? { ...item, content: (item.content ?? '') + delta } : item,
+                ),
+              );
             } else {
               const event = JSON.parse(frame.data) as AgentEvent;
               setMessages((prev) =>
@@ -386,20 +394,21 @@ export default function AssistantHome() {
               ) : (
                 <div key={message.id} className="chat-row assistant">
                   <div className={`chat-bubble assistant${message.error ? ' error' : ''}`}>
-                    {message.events && message.events.length > 0 ? (
-                      <ThinkingStream events={message.events} loading={message.loading ?? false} />
-                    ) : null}
-                    {message.loading && (!message.events || message.events.length === 0) ? (
-                      <span className="chat-typing">
-                        <i />
-                        <i />
-                        <i />
-                      </span>
-                    ) : null}
-                    {!message.loading ? (
-                      <>
-                        {message.content ? <Markdown content={message.content} /> : null}
-                        {message.error ? (
+                      {message.events && message.events.length > 0 ? (
+                        <ThinkingStream events={message.events} loading={message.loading ?? false} />
+                      ) : null}
+                      {message.loading && !message.content ? (
+                        <span className="chat-typing">
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      ) : null}
+                      {/* 流式期间实时渲染增量内容；完成后渲染完整块（含动作行） */}
+                      {message.content ? <Markdown content={message.content} /> : null}
+                      {!message.loading ? (
+                        <>
+                          {message.error ? (
                           <Link href="/chat" className="meta" style={{ display: 'inline-block', marginTop: 6 }}>
                             智能助手不可用？去经典问数 →
                           </Link>

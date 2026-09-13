@@ -11,6 +11,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { loadConfig } from './config.mjs';
 import { sseFrame, uiEvent } from './events.mjs';
 import { createSessionStore } from './sessions.mjs';
+import { createPgSessionStore } from './sessions_pg.mjs';
 import { createAskDataTool } from './tools/ask_data.mjs';
 import { createTraditionalQueryTool } from './tools/traditional_query.mjs';
 import { createGraphQueryTool } from './tools/graph_query.mjs';
@@ -168,6 +169,10 @@ export function createHandler({ config, store, service }) {
           onUiEvent: (event) => {
             if (!closed) res.write(sseFrame(event.type, event));
           },
+          // token 级流式：LLM 文本增量实时下发（answer_delta 帧契约见 protocol/events.schema.json）
+          onDelta: (delta) => {
+            if (!closed && delta) res.write(sseFrame('answer_delta', { delta }));
+          },
         });
         if (!closed) {
           res.write(sseFrame('done', {
@@ -205,10 +210,17 @@ export async function startServer({ config, store, service, listen = true }) {
   return server;
 }
 
+// 按配置选择会话存储：pg（生产多副本共享）| jsonl（本地开发默认）
+export function buildStore(config) {
+  if (config.sessionBackend === 'pg') return createPgSessionStore(config.db);
+  return createSessionStore(config.dataDir);
+}
+
 // 直接运行入口
 if (process.argv[1] && process.argv[1].endsWith('server.mjs')) {
   const config = loadConfig();
-  const store = createSessionStore(config.dataDir);
+  const store = buildStore(config);
+  if (store.ensureSchema) await store.ensureSchema();
   const { service } = createAppService({ config, store });
   const server = createServer(createHandler({ config, store, service }));
   server.listen(config.port, config.bindHost, () => {

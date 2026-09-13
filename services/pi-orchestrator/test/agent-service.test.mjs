@@ -82,3 +82,41 @@ describe('agent service', () => {
     expect(result.answer).toContain('超时');
   });
 });
+
+describe('agent service token streaming (F3)', () => {
+  it('text_delta 经 onDelta 实时下发且按序累积', async () => {
+    const store = await tempStore();
+    const svc = createAgentService({
+      config: CONFIG, model: 'stub', tools: [], store,
+      createAgent: ({ onPiEvent }) => ({
+        async prompt() {
+          for (const delta of ['你好', '，', '世界']) {
+            onPiEvent({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta } });
+          }
+        },
+        subscribe() {},
+      }),
+    });
+    const deltas = [];
+    const result = await svc.run({ userKey: 'u1', sessionId: 's9', question: 'q', onDelta: (d) => deltas.push(d) });
+    expect(deltas).toEqual(['你好', '，', '世界']);
+    expect(result.answer).toBe('你好，世界');
+  });
+
+  it('空 delta 不触发 onDelta', async () => {
+    const store = await tempStore();
+    const svc = createAgentService({
+      config: CONFIG, model: 'stub', tools: [], store,
+      createAgent: ({ onPiEvent }) => ({
+        async prompt() {
+          onPiEvent({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '' } });
+          onPiEvent({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'x' } });
+        },
+        subscribe() {},
+      }),
+    });
+    const deltas = [];
+    await svc.run({ userKey: 'u1', sessionId: 's10', question: 'q', onDelta: (d) => deltas.push(d) });
+    expect(deltas).toEqual(['x']);
+  });
+});

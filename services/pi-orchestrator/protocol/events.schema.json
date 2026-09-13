@@ -12,6 +12,13 @@
         "timestamp": { "type": "string" }
       }
     },
+    "answerDelta": {
+      "type": "object",
+      "required": ["delta"],
+      "properties": {
+        "delta": { "type": "string" }
+      }
+    },
     "doneFrame": {
       "type": "object",
       "required": ["sessionId", "answer", "events", "toolCalls", "durationMs"],
