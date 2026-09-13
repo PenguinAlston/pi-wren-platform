@@ -7,16 +7,18 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 
 from app.config import get_settings
 from app.deps import AppState, build_state
+from app.metrics import metrics
 from app.routers import (
     admin_agents,
     admin_users,
@@ -56,11 +58,49 @@ def _setup_logging():
 LOG_DIR = _setup_logging()
 
 
+# 路由粗分类（避免原始路径里的 id 造成标签爆炸）
+def _route_kind(path: str) -> str | None:
+    if path.startswith("/internal/agent/"):
+        return "internal_ask_data"
+    if path.startswith("/internal/traditional/"):
+        return "internal_traditional_query"
+    if path.startswith("/internal/graph/"):
+        return "internal_graph"
+    if path.startswith("/api/assistant/"):
+        return "assistant_proxy"
+    if path.startswith("/api/agent/"):
+        return "chat"
+    if path.startswith("/api/traditional/"):
+        return "traditional_api"
+    if path.startswith("/api/graph/"):
+        return "graph_api"
+    if path.startswith("/api/sessions"):
+        return "sessions_api"
+    if path.startswith("/api/auth/"):
+        return "auth_api"
+    if path.startswith("/api/admin/"):
+        return "admin_api"
+    if path.startswith("/api/feedback"):
+        return "feedback_api"
+    return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """启动时构建依赖，关闭时释放资源。"""
     settings = get_settings()
     logger.info("启动 pi-wren Python 后端 (port={})", settings.PORT)
+
+    # 错误追踪（可选）：配置 SENTRY_DSN 即启用，未配置零开销
+    if settings.SENTRY_DSN:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.NODE_ENV,
+            traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
+        )
+        logger.info("Sentry 错误追踪已启用")
 
     state = await build_state(settings)
     app.state.app_state = state
@@ -69,6 +109,11 @@ async def lifespan(app: FastAPI):
 
     # 清理
     logger.info("正在关闭...")
+    if state.redis is not None:
+        try:
+            await state.redis.aclose()
+        except Exception:
+            pass
     try:
         state.engine.close()
     except Exception:
@@ -97,6 +142,24 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # HTTP 指标（Prometheus）：请求数 + 时延直方图，按粗分类路由打标签
+    @app.middleware("http")
+    async def prom_http_metrics(request: Request, call_next):
+        kind = _route_kind(request.url.path)
+        if kind is None:
+            return await call_next(request)
+        started = time.monotonic()
+        try:
+            response = await call_next(request)
+            status = str(response.status_code)
+        except Exception:
+            metrics.inc_counter("http_requests", kind=kind, method=request.method, status="500")
+            raise
+        finally:
+            metrics.observe("http_duration", (time.monotonic() - started) * 1000, kind=kind)
+        metrics.inc_counter("http_requests", kind=kind, method=request.method, status=status)
+        return response
 
     app.include_router(health.router)
     app.include_router(auth.router)

@@ -26,6 +26,10 @@ dependencies = [
     "sqlglot>=25",
     # tiktoken for token estimation
     "tiktoken>=0.7",
+    # redis：限流共享态（REDIS_URL 配置时启用，未配置纯内存）
+    "redis>=5",
+    # sentry：错误追踪（SENTRY_DSN 配置时启用，未配置零开销）
+    "sentry-sdk[fastapi]>=2",
 ]
 
 [project.optional-dependencies]

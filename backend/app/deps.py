@@ -4,8 +4,10 @@
 """
 from __future__ import annotations
 
-import asyncpg
 from dataclasses import dataclass, field
+from typing import Any
+
+import asyncpg
 from loguru import logger
 
 from app.agents.data_analysis import DataAnalysisAgent
@@ -15,7 +17,7 @@ from app.config import Settings
 from app.insurance.service import InsuranceQueryService
 from app.llm import build_llm
 from app.models.schemas import AgentInfo
-from app.ratelimit import SlidingWindowRateLimiter
+from app.ratelimit import AsyncRateLimiter, RedisSlidingWindowRateLimiter, SlidingWindowRateLimiter
 from app.registry.agent_registry import AgentRegistry
 from app.registry.audit import OperationAuditLogger
 from app.registry.store import AgentConfigStore
@@ -56,8 +58,9 @@ class AppState:
     users: UserStore | None = None  # AUTH_ENABLED 时非空
     agent_store: AgentConfigStore | None = None  # 自定义 Agent 持久化
     agent_registry: AgentRegistry | None = None  # 自定义 Agent 生命周期
-    rate_limit_chat: SlidingWindowRateLimiter | None = None
-    rate_limit_login: SlidingWindowRateLimiter | None = None
+    rate_limit_chat: AsyncRateLimiter | None = None
+    rate_limit_login: AsyncRateLimiter | None = None
+    redis: Any = None  # REDIS_URL 配置时的共享限流客户端（生命周期随应用）
 
     def get_agent(self, domain: str) -> AgentSpec | None:
         return self.agents.get(domain)
@@ -113,9 +116,33 @@ async def build_state(settings: Settings) -> AppState:
                                          description=inst.domain.description, agent=inst, source="custom")
         logger.info("自定义 Agent 已启用: {}", list(registry.instances.keys()))
 
-    # 限流器（进程内存滑动窗口；0 = 关闭）
-    rate_limit_chat = SlidingWindowRateLimiter(settings.RATE_LIMIT_CHAT_PER_MIN)
-    rate_limit_login = SlidingWindowRateLimiter(settings.RATE_LIMIT_LOGIN_PER_MIN)
+    # 限流器（滑动窗口；0 = 关闭）：REDIS_URL 可用时切 Redis 共享后端，失败自动降级内存
+    redis_client = None
+    if settings.REDIS_URL:
+        try:
+            import redis.asyncio as aioredis
+
+            redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+            await redis_client.ping()
+            logger.info("限流后端: redis ({})", settings.REDIS_URL)
+        except Exception as exc:  # noqa: BLE001 — Redis 不可用不应阻断启动
+            logger.warning("Redis 连接失败，限流降级为进程内存: {}", exc)
+            if redis_client is not None:
+                await redis_client.aclose()
+            redis_client = None
+
+    chat_backend = (
+        RedisSlidingWindowRateLimiter(redis_client, settings.RATE_LIMIT_CHAT_PER_MIN)
+        if redis_client
+        else SlidingWindowRateLimiter(settings.RATE_LIMIT_CHAT_PER_MIN)
+    )
+    login_backend = (
+        RedisSlidingWindowRateLimiter(redis_client, settings.RATE_LIMIT_LOGIN_PER_MIN)
+        if redis_client
+        else SlidingWindowRateLimiter(settings.RATE_LIMIT_LOGIN_PER_MIN)
+    )
+    rate_limit_chat = AsyncRateLimiter(chat_backend)
+    rate_limit_login = AsyncRateLimiter(login_backend)
 
     # 用户认证（AUTH_ENABLED 时启用：建表 + 引导管理员）
     users = None
@@ -133,4 +160,5 @@ async def build_state(settings: Settings) -> AppState:
     return AppState(settings=settings, agents=agents, engine=engine, pool=pool,
                     memory=memory, agent_store=agent_store, agent_registry=agent_registry,
                     audit=audit, feedback=feedback, insurance=insurance, users=users,
-                    rate_limit_chat=rate_limit_chat, rate_limit_login=rate_limit_login)
+                    rate_limit_chat=rate_limit_chat, rate_limit_login=rate_limit_login,
+                    redis=redis_client)

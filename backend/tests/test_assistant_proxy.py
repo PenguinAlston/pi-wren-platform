@@ -142,11 +142,13 @@ async def test_stream_503_when_not_configured():
 
 
 async def test_stream_rate_limited():
-    limiter = SimpleNamespace(
-        limit=1,
-        allow=lambda key: False,
-        retry_after=lambda key: 7,
-    )
+    async def deny(_key):
+        return False
+
+    async def retry_seconds(_key):
+        return 7
+
+    limiter = SimpleNamespace(limit=1, allow=deny, retry_after=retry_seconds)
     state = SimpleNamespace(
         settings=SimpleNamespace(PI_ORCHESTRATOR_URL="http://pi:8090", INTERNAL_API_TOKEN="tok"),
         rate_limit_chat=limiter,

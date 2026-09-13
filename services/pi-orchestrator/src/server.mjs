@@ -10,6 +10,7 @@ import {
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { loadConfig } from './config.mjs';
 import { sseFrame, uiEvent } from './events.mjs';
+import { createMetrics } from './metrics.mjs';
 import { createSessionStore } from './sessions.mjs';
 import { createPgSessionStore } from './sessions_pg.mjs';
 import { createAskDataTool } from './tools/ask_data.mjs';
@@ -58,9 +59,12 @@ export function createPiAgent({ systemPrompt, model, tools, sessionId, onPiEvent
   };
 }
 
-export function createAppService({ config, store, createAgent = null }) {
+export function createAppService({ config, store, createAgent = null, metrics = createMetrics() }) {
   if (createAgent) {
-    return createAgentService({ config, model: 'stub', tools: [createAskDataTool(config)], store, createAgent });
+    return {
+      metrics,
+      service: createAgentService({ config, model: 'stub', tools: [createAskDataTool(config)], store, createAgent, metrics }),
+    };
   }
   const { model, streamFn } = buildModel(config);
   const service = createAgentService({
@@ -78,25 +82,51 @@ export function createAppService({ config, store, createAgent = null }) {
     },
     store,
     createAgent: (args) => createPiAgent({ ...args, streamFn }),
+    metrics,
   });
-  return { service };
+  return { service, metrics };
 }
 
-export function createHandler({ config, store, service }) {
+/** 请求路由粗分类（避免原始路径里的 sessionId 造成标签爆炸）。 */
+function routeKind(method, pathname) {
+  if (pathname === '/health') return 'health';
+  if (pathname === '/metrics') return 'metrics';
+  if (pathname === '/sessions') return 'sessions_list';
+  if (pathname.startsWith('/sessions/')) {
+    if (pathname.endsWith('/messages')) return 'sse_run';
+    return method === 'DELETE' ? 'sessions_delete' : 'sessions_get';
+  }
+  return 'other';
+}
+
+export function createHandler({ config, store, service, metrics = null }) {
   return async function handler(req, res) {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+    const startedAt = Date.now();
     const send = (status, body) => {
+      metrics?.incCounter('http_requests', { route: routeKind(req.method ?? '', url.pathname), status: String(status) });
       res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(body));
     };
+    const sendSse = () => {
+      metrics?.incCounter('http_requests', { route: 'sse_run', status: '200' });
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+        Connection: 'keep-alive',
+      });
+    };
 
-    // internal token 全端点强制（常量时间比较）
+    // internal token 全端点强制（常量时间比较）；支持 x-internal-token 或 Authorization: Bearer（Prometheus 抓取）
     const token = String(req.headers['x-internal-token'] ?? '');
+    const bearer = /^Bearer\s+(.+)$/i.exec(String(req.headers['authorization'] ?? ''))?.[1] ?? '';
+    const provided = token || bearer;
     const expected = config.internalToken;
     const okToken =
       expected.length > 0 &&
-      token.length === expected.length &&
-      timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+      provided.length === expected.length &&
+      timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
     if (!okToken) {
       send(401, { error: 'invalid internal token' });
       return;
@@ -104,6 +134,13 @@ export function createHandler({ config, store, service }) {
 
     if (req.method === 'GET' && url.pathname === '/health') {
       send(200, { status: 'ok' });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/metrics') {
+      metrics?.incCounter('http_requests', { route: 'metrics', status: '200' });
+      res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
+      res.end(metrics ? metrics.render() : '');
       return;
     }
 
@@ -150,12 +187,7 @@ export function createHandler({ config, store, service }) {
         return;
       }
 
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
-        'X-Accel-Buffering': 'no',
-        Connection: 'keep-alive',
-      });
+      sendSse();
       let closed = false;
       req.on('close', () => {
         closed = true;
@@ -174,6 +206,7 @@ export function createHandler({ config, store, service }) {
             if (!closed && delta) res.write(sseFrame('answer_delta', { delta }));
           },
         });
+        metrics?.observe('sse_run_duration', Date.now() - startedAt);
         if (!closed) {
           res.write(sseFrame('done', {
             sessionId: pathSessionId,
@@ -201,8 +234,8 @@ export function createHandler({ config, store, service }) {
   };
 }
 
-export async function startServer({ config, store, service, listen = true }) {
-  const handler = createHandler({ config, store, service });
+export async function startServer({ config, store, service, metrics = null, listen = true }) {
+  const handler = createHandler({ config, store, service, metrics });
   const server = createServer(handler);
   if (listen) {
     await new Promise((resolve) => server.listen(config.port, config.bindHost, resolve));
@@ -218,11 +251,17 @@ export function buildStore(config) {
 
 // 直接运行入口
 if (process.argv[1] && process.argv[1].endsWith('server.mjs')) {
+  // 错误追踪（可选）：配置 SENTRY_DSN 即启用
+  if (process.env.SENTRY_DSN) {
+    const Sentry = await import('@sentry/node');
+    Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV ?? 'production' });
+    console.log('Sentry error tracking enabled');
+  }
   const config = loadConfig();
   const store = buildStore(config);
   if (store.ensureSchema) await store.ensureSchema();
-  const { service } = createAppService({ config, store });
-  const server = createServer(createHandler({ config, store, service }));
+  const { service, metrics } = createAppService({ config, store });
+  const server = createServer(createHandler({ config, store, service, metrics }));
   server.listen(config.port, config.bindHost, () => {
     console.log(`pi-orchestrator listening on http://127.0.0.1:${config.port}`);
   });

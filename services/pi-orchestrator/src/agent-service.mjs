@@ -22,12 +22,14 @@ function buildSystemPrompt(history) {
   return `${lines.join('\n')}\n\n${SYSTEM_PROMPT_BASE}`;
 }
 
-/** 工具包装：超限时返回引导收尾的错误结果；ask_data 的结构化结果捕获进 sink（供 done 帧）。 */
-function guardToolCall(tool, guardrails, sink) {
+/** 工具包装：超限返回引导收尾的错误结果；ask_data 的结构化结果捕获进 sink（供 done 帧）。
+ * metrics：工具调用计数/时长/护栏拒绝（可空——测试 stub 不接指标）。 */
+function guardToolCall(tool, guardrails, sink, metrics = null) {
   return {
     ...tool,
     execute: async (id, params) => {
       if (!guardrails.registerToolCall()) {
+        metrics?.incCounter('guardrail_rejects', { tool: tool.name ?? 'unknown' });
         return {
           content: [{
             type: 'text',
@@ -35,28 +37,40 @@ function guardToolCall(tool, guardrails, sink) {
           }],
         };
       }
-      const result = await tool.execute(id, params);
-      // ask_data 结构化结果：优先 details 通道（全量行，不进模型上下文），回退解析 content 文本
-      const detailPayload = result.details ?? null;
-      if (detailPayload && detailPayload.rows !== undefined) {
-        sink.sql = detailPayload.sql ?? null;
-        sink.data = detailPayload.rows ?? null;
-        sink.rowCount = detailPayload.rowCount ?? 0;
-        sink.messageId = detailPayload.messageId ?? null;
-      } else {
-        try {
-          const payload = JSON.parse(result.content?.[0]?.text ?? '');
-          if (payload.ok && payload.sql !== undefined) {
-            sink.sql = payload.sql;
-            sink.data = payload.sampleRows ?? null;
-            sink.rowCount = payload.rowCount ?? 0;
-            sink.messageId = payload.messageId ?? null;
+      const startedAt = Date.now();
+      let status = 'ok';
+      try {
+        const result = await tool.execute(id, params);
+        // ask_data 结构化结果：优先 details 通道（全量行，不进模型上下文），回退解析 content 文本
+        const detailPayload = result.details ?? null;
+        if (detailPayload && detailPayload.rows !== undefined) {
+          sink.sql = detailPayload.sql ?? null;
+          sink.data = detailPayload.rows ?? null;
+          sink.rowCount = detailPayload.rowCount ?? 0;
+          sink.messageId = detailPayload.messageId ?? null;
+        } else {
+          try {
+            const payload = JSON.parse(result.content?.[0]?.text ?? '');
+            if (payload.ok && payload.sql !== undefined) {
+              sink.sql = payload.sql;
+              sink.data = payload.sampleRows ?? null;
+              sink.rowCount = payload.rowCount ?? 0;
+              sink.messageId = payload.messageId ?? null;
+            } else if (payload.ok === false) {
+              status = 'error';
+            }
+          } catch {
+            // 非 JSON 工具结果忽略
           }
-        } catch {
-          // 非 JSON 工具结果忽略
         }
+        return result;
+      } catch (err) {
+        status = 'error';
+        throw err;
+      } finally {
+        metrics?.incCounter('tool_calls', { tool: tool.name ?? 'unknown', status });
+        metrics?.observe('tool_duration', Date.now() - startedAt, { tool: tool.name ?? 'unknown' });
       }
-      return result;
     },
   };
 }
@@ -66,7 +80,7 @@ function guardToolCall(tool, guardrails, sink) {
  * createAgent 注入：({ systemPrompt, model, tools, sessionId, onPiEvent }) =>
  *   { prompt(q), subscribe(fn), abort? }——生产用真 pi Agent，测试用 stub。
  */
-export function createAgentService({ config, model, tools = [], toolsFactory = null, store, createAgent }) {
+export function createAgentService({ config, model, tools = [], toolsFactory = null, store, createAgent, metrics = null }) {
   return {
     async run({ userKey, sessionId, question, onUiEvent, onDelta }) {
       const guardrails = createGuardrails(config);
@@ -85,7 +99,7 @@ export function createAgentService({ config, model, tools = [], toolsFactory = n
         systemPrompt: buildSystemPrompt(history),
         model,
         // toolsFactory：按请求上下文（userKey）生成带身份的工具；tools 为静态工具（测试用）
-        tools: (toolsFactory ? toolsFactory({ userKey }) : tools).map((tool) => guardToolCall(tool, guardrails, sink)),
+        tools: (toolsFactory ? toolsFactory({ userKey }) : tools).map((tool) => guardToolCall(tool, guardrails, sink, metrics)),
         sessionId,
         onPiEvent: (e) => {
           // LLM 文本增量：实时下发（token 级流式），不进 trace 事件列表
@@ -120,6 +134,9 @@ export function createAgentService({ config, model, tools = [], toolsFactory = n
         answer,
         at: new Date().toISOString(),
       });
+
+      metrics?.incCounter('answers', { status: failure ? 'error' : 'ok' });
+      metrics?.observe('answer_duration', guardrails.elapsedMs);
 
       return {
         answer,

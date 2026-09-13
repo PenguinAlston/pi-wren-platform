@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.auth.passwords import verify_password
 from app.auth.tokens import sign_token
+from app.metrics import metrics
 
 router = APIRouter()
 
@@ -52,8 +53,9 @@ async def login(request: Request):
     # 按 IP 限流（防暴力破解；认证场景 IP 是唯一稳定键）
     limiter = state.rate_limit_login
     ip = request.client.host if request.client else "unknown"
-    if limiter is not None and limiter.limit > 0 and not limiter.allow(f"ip:{ip}"):
-        retry = limiter.retry_after(f"ip:{ip}")
+    if limiter is not None and limiter.limit > 0 and not await limiter.allow(f"ip:{ip}"):
+        retry = await limiter.retry_after(f"ip:{ip}")
+        metrics.inc_counter("ratelimit_reject", scope="login")
         return JSONResponse(
             status_code=429,
             headers={"Retry-After": str(retry)},

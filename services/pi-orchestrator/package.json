@@ -13,6 +13,7 @@
   "dependencies": {
     "@earendil-works/pi-agent-core": "0.83.0",
     "@earendil-works/pi-ai": "0.83.0",
+    "@sentry/node": "^10.74.0",
     "pg": "^8.23.0"
   },
   "devDependencies": {

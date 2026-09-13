@@ -10,6 +10,11 @@
 - [x] CI 三 job（`.github/workflows/ci.yml`）：frontend（lint/typecheck/test/build）、backend（pytest + golden SQL 可选回归）、pi-orchestrator（npm ci + 51 用例）
 - [x] 编排层 lockfile（`package-lock.json`）保证 CI 可复现安装
 
+### 可观测性与运行时加固（2026-09 P2）
+- [x] Prometheus 指标双端点（后端 + 编排层，零依赖渲染器）+ 采集 profile，详见 `docs/observability.md`
+- [x] Sentry 可选错误追踪（双服务，DSN 驱动）
+- [x] Redis 限流共享态（ZSET 滑动窗口 + 异步统一门面，降级内存）
+
 ### 治理与安全
 - [x] 认证与用户管理：登录会话 + internal token、用户管理页、会话归属隔离、口令强度策略
 - [x] 机构行级权限 OrgAccess 三态（admin/org/deny）：问数 SQL AST 强制（sqlglot 三级降级）、传统查询机构覆盖 + deny 403、图谱 BFS 子图过滤；Pi 工具回调链路（internal API + x-user-id 反查）同样受控
@@ -39,10 +44,10 @@
 - [ ] 服务器环境跑一轮 30 条评测回归（验证生产检索/LLM 链路质量基线）
 
 ### P2 — 可观测性与性能
-- [ ] Prometheus `/metrics`：后端已有 metrics 模块，补编排层（工具成功率/时长/护栏触发）与统一采集
-- [ ] 错误追踪（Sentry 或 OpenTelemetry 导出）
-- [ ] 混合路由提速：常见问题快路径（<1s），仅新问题走 Agent 循环
-- [ ] Redis 落地使用（当前预留未启用）：限流共享态 / 会话列表缓存 / 语义检索结果缓存
+- [x] Prometheus 指标：后端 `/api/metrics`（HTTP 计数/时延按粗分类路由 + chat/限流/反馈计数）+ 编排层 `/metrics`（工具成功率/时延/护栏拒绝/回答时长），采集配置见 `infra/prometheus.yml` 与 compose `monitoring` profile（见 `docs/observability.md`）
+- [x] 错误追踪：Sentry 可选接入（后端 sentry-sdk[fastapi] + 编排层 @sentry/node，配置 `SENTRY_DSN` 即启用，未配置零开销）
+- [x] Redis 落地（第一步）：限流共享态切 Redis ZSET（`REDIS_URL` 配置即启用，失败自动降级内存，多副本一致）；限流/缓存进一步用途待做
+- [ ] 混合路由提速：常见问题快路径（<1s），仅新问题走 Agent 循环（建议先跑服务器端 30 条评测基线，用数据定位常见问题再设计快路径）
 - [ ] 数据库迁移工具（当前依赖 init 脚本 + 手工 SQL）
 
 ### P3 — 平台化

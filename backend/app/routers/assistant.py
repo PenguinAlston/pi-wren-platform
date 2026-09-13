@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from loguru import logger
 
 from app.deps import AppState
+from app.metrics import metrics
 
 router = APIRouter(prefix="/api/assistant")
 
@@ -115,13 +116,14 @@ def _upstream_base(state: AppState) -> str | None:
     return (state.settings.PI_ORCHESTRATOR_URL or "").rstrip("/") or None
 
 
-def _check_rate_limit(state: AppState, request: Request, user_id: str | None) -> JSONResponse | None:
+async def _check_rate_limit(state: AppState, request: Request, user_id: str | None) -> JSONResponse | None:
     limiter = state.rate_limit_chat
     if limiter is None or limiter.limit == 0:
         return None
     key = f"user:{user_id}" if user_id else f"ip:{request.client.host if request.client else 'unknown'}"
-    if not limiter.allow(key):
-        retry = limiter.retry_after(key)
+    if not await limiter.allow(key):
+        retry = await limiter.retry_after(key)
+        metrics.inc_counter("ratelimit_reject", scope="assistant")
         return JSONResponse(
             status_code=429,
             headers={"Retry-After": str(retry)},
@@ -139,7 +141,7 @@ async def assistant_chat_stream(request: Request):
 
     user = getattr(request.state, "user", None)
     user_id = user.user_id if user else None
-    limited = _check_rate_limit(state, request, user_id)
+    limited = await _check_rate_limit(state, request, user_id)
     if limited:
         return limited
 

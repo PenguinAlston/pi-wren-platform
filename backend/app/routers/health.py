@@ -29,9 +29,17 @@ async def prometheus_metrics(request: Request):
     """进程指标（Prometheus 文本格式）。
 
     AUTH_ENABLED 时仅 admin（登录会话或 X-Admin-Token）可见；
+    配置 METRICS_TOKEN 后可携带 X-Metrics-Token 头抓取（供 Prometheus 使用）；
     未启用认证时开放（与 API 整体开放程度一致）。
     """
     state = request.app.state.app_state
     if state.settings.AUTH_ENABLED:
-        require_admin(request)
+        metrics_token = state.settings.METRICS_TOKEN or ""
+        provided = request.headers.get("x-metrics-token", "")
+        if not provided:
+            # Prometheus 原生只支持 Authorization 头，允许 Bearer 形式等价通过
+            bearer = request.headers.get("authorization", "")
+            provided = bearer.removeprefix("Bearer ").strip()
+        if not (metrics_token and provided and provided == metrics_token):
+            require_admin(request)
     return Response(content=metrics.render(), media_type="text/plain; version=0.0.4")

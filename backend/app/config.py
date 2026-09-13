@@ -92,9 +92,21 @@ class Settings(BaseSettings):
     # WrenEngine 引擎池大小：每引擎一条 psycopg 连接（懒创建），并发查询轮询分发
     AI_ENGINE_POOL_SIZE: int = Field(4, ge=1, le=32)
 
-    # --- 限流（滑动窗口，进程内存；0 = 关闭）---
+    # --- 限流（滑动窗口；0 = 关闭）---
+    # 后端：REDIS_URL 配置时用 Redis ZSET 共享限流（多副本一致），否则进程内存（单副本）
     RATE_LIMIT_CHAT_PER_MIN: int = Field(12, ge=0)
     RATE_LIMIT_LOGIN_PER_MIN: int = Field(10, ge=0)
+
+    # --- Redis（可选）---
+    # 如 redis://redis:6379/0 —— 用于限流共享态；未配置则全部降级进程内存
+    REDIS_URL: str = ""
+
+    # --- 可观测性 ---
+    # Prometheus 抓取令牌：配置后 /api/metrics 可用 X-Metrics-Token 绕过 admin 会话鉴权
+    METRICS_TOKEN: str | None = None
+    # Sentry 错误追踪：配置 DSN 即启用（sentry-sdk[fastapi]），未配置零开销
+    SENTRY_DSN: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = Field(0.0, ge=0.0, le=1.0)
 
     # --- LLM（统一走 OpenAI 兼容接口：base_url 可指向 DashScope/DeepSeek/vLLM 等）---
     OPENAI_API_KEY: str | None = None

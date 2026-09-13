@@ -116,6 +116,21 @@ services:
     mem_limit: 256m
     restart: unless-stopped
 
+  # 监控采集（可选，1.6G 小内存主机默认不启动）：
+  #   docker compose -f docker-compose.prod.yml --profile monitoring up -d prometheus
+  # 先在 .env 配 METRICS_TOKEN，并把 infra/prometheus.yml 里的占位令牌换成同值
+  prometheus:
+    image: ${PROMETHEUS_IMAGE:-docker.m.daocloud.io/prom/prometheus:latest}
+    profiles: ["monitoring"]
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - '9090:9090'
+    mem_limit: 512m
+    restart: unless-stopped
+
 volumes:
   pgdata:
   pi_sessions:
+  promdata:

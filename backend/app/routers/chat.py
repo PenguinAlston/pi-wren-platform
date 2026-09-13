@@ -34,15 +34,16 @@ def _rate_limit_key(request: Request, user_id: str | None) -> str:
     return f"ip:{client}"
 
 
-def _check_chat_rate_limit(state: AppState, request: Request, user_id: str | None) -> JSONResponse | None:
+async def _check_chat_rate_limit(state: AppState, request: Request, user_id: str | None) -> JSONResponse | None:
     """聊天限流（LLM 成本防护）。超限返回 429，未超限返回 None。"""
     limiter = state.rate_limit_chat
     if limiter is None or limiter.limit == 0:
         return None
     key = _rate_limit_key(request, user_id)
-    if limiter.allow(key):
+    if await limiter.allow(key):
         return None
-    retry = limiter.retry_after(key)
+    retry = await limiter.retry_after(key)
+    metrics.inc_counter("ratelimit_reject", scope="chat")
     return JSONResponse(
         status_code=429,
         headers={"Retry-After": str(retry)},
@@ -98,7 +99,7 @@ async def _chat(state: AppState, domain: str, body: dict, request: Request) -> J
     user = getattr(request.state, "user", None)
     user_id = user.user_id if user else None
 
-    limited = _check_chat_rate_limit(state, request, user_id)
+    limited = await _check_chat_rate_limit(state, request, user_id)
     if limited:
         return limited
 
@@ -142,7 +143,7 @@ async def chat_stream(domain: str, request: Request):
     user = getattr(request.state, "user", None)
     user_id = user.user_id if user else None
 
-    limited = _check_chat_rate_limit(state, request, user_id)
+    limited = await _check_chat_rate_limit(state, request, user_id)
     if limited:
         return limited
 

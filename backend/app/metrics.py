@@ -32,10 +32,11 @@ class Metrics:
         with self._lock:
             self._counters[name][key] += value
 
-    def observe(self, name: str, value_ms: float) -> None:
+    def observe(self, name: str, value_ms: float, **labels: str) -> None:
+        key = tuple(sorted(labels.items()))
         with self._lock:
             bucket_state = self._histograms[name].setdefault(
-                (), {"counts": [0] * (len(self._buckets) + 1), "sum": 0.0, "count": 0}
+                key, {"counts": [0] * (len(self._buckets) + 1), "sum": 0.0, "count": 0}
             )
             idx = len(self._buckets)
             for i, bound in enumerate(self._buckets):
@@ -63,21 +64,24 @@ class Metrics:
                 for key, value in sorted(series.items()):
                     lines.append(f"{metric}{_render_labels(dict(key))} {value}")
 
-            for name, _ in sorted(self._histograms.items()):
+            for name, series in sorted(self._histograms.items()):
                 metric = f"piwren_{name}_milliseconds"
                 lines.append(f"# HELP {metric} Histogram {name} in milliseconds")
                 lines.append(f"# TYPE {metric} histogram")
-                state = self._histograms[name].get(())
-                if not state:
-                    continue
-                cumulative = 0
-                for bound, cnt in zip(self._buckets, state["counts"]):
-                    cumulative += cnt
-                    lines.append(f'{metric}_bucket{{le="{bound}"}} {cumulative}')
-                cumulative += state["counts"][-1]
-                lines.append(f'{metric}_bucket{{le="+Inf"}} {cumulative}')
-                lines.append(f'{metric}_sum {state["sum"]:.1f}')
-                lines.append(f'{metric}_count {state["count"]}')
+                for key, state in sorted(series.items()):
+                    labels = _render_labels(dict(key))
+                    # 桶线：数据标签 + le 合并进同一个 {} 块（Prometheus 要求单标签块）
+                    def bucket_line(bound: str, cumulative: int) -> str:
+                        return f"{metric}_bucket{_render_labels({**dict(key), 'le': bound})} {cumulative}"
+
+                    cumulative = 0
+                    for bound, cnt in zip(self._buckets, state["counts"]):
+                        cumulative += cnt
+                        lines.append(bucket_line(str(bound), cumulative))
+                    cumulative += state["counts"][-1]
+                    lines.append(bucket_line("+Inf", cumulative))
+                    lines.append(f"{metric}_sum{labels} {state['sum']:.1f}")
+                    lines.append(f"{metric}_count{labels} {state['count']}")
             return "\n".join(lines) + "\n"
 
 

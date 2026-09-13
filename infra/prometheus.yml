@@ -1,0 +1,30 @@
+# Prometheus 抓取配置（pi-wren 生产栈）
+#
+# 使用步骤：
+#   1. 仓库根 .env 配置 METRICS_TOKEN（与 INTERNAL_API_TOKEN 区分开）
+#   2. 把下面两处 credentials 占位替换为 .env 中对应的值
+#   3. docker compose -f docker-compose.prod.yml --profile monitoring up -d prometheus
+#   4. 浏览器访问 http://<host>:9090 → Status / Targets 应看到两个 UP 的 target
+#
+# 注意：1.6G 小内存主机默认不启动该 profile（prometheus 约占 200-400MB 内存），
+# 也可把本文件复制到任意外部 Prometheus 主机，targets 换成可达地址即可。
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  # Python 后端：/api/metrics（http_requests/http_duration/chat/ratelimit_reject/feedback 等）
+  - job_name: piwren-backend
+    metrics_path: /api/metrics
+    static_configs:
+      - targets: ['backend:8080']
+    authorization:
+      credentials: CHANGE_ME_METRICS_TOKEN
+
+  # Pi 编排层：/metrics（http_requests/tool_calls/tool_duration/guardrail_rejects/answer_duration 等）
+  - job_name: piwren-pi-orchestrator
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['pi-orchestrator:8090']
+    authorization:
+      credentials: CHANGE_ME_INTERNAL_API_TOKEN
