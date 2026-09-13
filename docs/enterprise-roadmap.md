@@ -1,72 +1,61 @@
 # 企业级演进路线图
 
-本文记录从 MVP 骨架到企业级平台已完成的工程化改造，以及后续需要处理的能力清单。
+本文记录平台企业级改造的完成情况与待处理清单（2026-09-13 对照代码现状全面更新）。
 
-## 已完成（2026-08）
+## 已完成
 
 ### 工程基础
-- [x] pnpm workspace 重构（`pnpm-workspace.yaml` + `allowBuilds`，9 个 workspace）
-- [x] 统一的 TypeScript 基础配置（strict + `verbatimModuleSyntax` + `noUncheckedIndexedAccess`）
-- [x] ESLint 9 flat config + Prettier
-- [x] 环境配置：zod 校验 + `.env` 自动加载（dotenv）+ `.env.example`
-- [x] 依赖锁定（`pnpm-lock.yaml`），CI 使用 `--frozen-lockfile`
-- [x] GitHub Actions CI（lint / typecheck / test / build）
+- [x] 混合技术栈单仓：Python 后端（FastAPI）+ Node 编排层（pi-orchestrator）+ Next.js 前端（pnpm workspace）
+- [x] 后端 pydantic-settings 配置校验 + 仓库根 `.env`（不入库）；编排层 `src/config.mjs` 集中配置
+- [x] CI 三 job（`.github/workflows/ci.yml`）：frontend（lint/typecheck/test/build）、backend（pytest + golden SQL 可选回归）、pi-orchestrator（npm ci + 51 用例）
+- [x] 编排层 lockfile（`package-lock.json`）保证 CI 可复现安装
+
+### 治理与安全
+- [x] 认证与用户管理：登录会话 + internal token、用户管理页、会话归属隔离、口令强度策略
+- [x] 机构行级权限 OrgAccess 三态（admin/org/deny）：问数 SQL AST 强制（sqlglot 三级降级）、传统查询机构覆盖 + deny 403、图谱 BFS 子图过滤；Pi 工具回调链路（internal API + x-user-id 反查）同样受控
+- [x] SQL 治理：WrenAI dry-run 校验 + 表名白名单二次校验 + 危险语句拦截，只读事务/语句超时/行数上限
+- [x] 审计：管理操作与问数记录落库；点赞/点踩反馈落库 + 管理端查看
+- [x] 限流（后端 ratelimit）+ Pi 侧护栏（工具次数/总时长/工具超时/SSE 上限）
 
 ### 运行时能力
-- [x] 真实 LLM Provider：OpenAI 兼容（已接入阿里云 DashScope qwen3.7-flash）、Anthropic、Ollama + 离线 Mock
-- [x] LLM 动态 SQL 生成（`LlmContextEngine`）：提示词注入表结构/业务知识/示例意图
-- [x] SQL 安全校验（`sql-validation`）：统一关口（database_query）+ 字符串/注释防绕过 + 危险函数拦截 + 表名白名单（LLM/规则/Wren/自定义 Agent 全路径生效）
-- [x] 失败自动降级：LLM 不可用/输出不安全 → 规则引擎兜底，查询永不中断
-- [x] 防幻觉提示词：日期/数值逐字照抄，查不到的字段如实说明"未包含"
-- [x] MDL 式语义引擎（`semantic/*.mdl.yml`：模型/意图/指标/知识，关键词评分匹配）
-- [x] Wren AI HTTP 客户端（配置 `WREN_URL` 启用真实服务）
-- [x] PostgreSQL 数据引擎（连接池、SQL 执行、错误包裹）
-- [x] DataAnalysisAgent 通用流水线：计划 → SQL → 查询 → 分析 → 摘要（领域配置驱动，财务/保险双 Agent）
-- [x] 结构化执行事件（plan/tool_call/tool_result/observation/answer/error）与前端轨迹
-- [x] 内存会话记忆抽象（`MemoryStore` 接口）
-- [x] 开源 Pi 会话层接入（方案 A）：`services/pi-bridge`，基于 pi jsonl 会话仓库持久化多轮会话（`data/sessions/`），Agent 支持 `sessionId` 续聊 + 历史注入
-- [x] SSE 流式输出（执行事件实时推送）：`POST /api/agent/:domain/chat/stream`，前端实时轨迹（LLM token 级流式待做）
-- [x] 保险核心业务表结构（依据需求文档：契约/保全/理赔/客户/字典等 22 张生产级表 + 种子数据）
-- [x] Express API：健康检查、请求校验、pino 结构化日志、统一错误处理、优雅停机、超时保护
-- [x] Next.js 聊天控制台：多 Agent 切换、结论、轨迹、SQL、结果表、120s 请求超时
-- [x] Next 代理超时修复（`proxyTimeout: 120s`，适配慢速 LLM）
-- [x] Vitest 单元/集成测试（92 个用例）
-- [x] 自定义 Agent Phase 1：`services/agent-registry` + `sys_agent_config` 表 + 管理 API（注册/列表/详情/更新/删除/连接测试/MDL 校验，`X-Admin-Token` 鉴权，连接串 AES-256-GCM 加密 + 脱敏，错误隔离）
-- [x] 自定义 Agent Phase 2：前端管理页 `/agents`（MDL 粘贴/校验/测试连接/启停/编辑/删除/池监控）+ 示例模板 `examples/mdl-template.yml`
-- [x] 自定义 Agent Phase 3：多租户 `owner_id`（列表过滤）、管理操作审计落库 `sys_operation_log`、连接池监控 `GET /api/admin/agents/:id/status`（更新/注销自动释放池）
-- [x] 生产构建修复：API 由 tsup ESM 改 CJS（pg/yaml 等原生 CJS 依赖在 ESM bundle 运行时报错）；`resolveSemanticFile` 兼容打包后运行
+- [x] WrenAI 原生语义工程（MDL v5 单一源）+ 进程内引擎 + 语义检索三级降级（远程 embedding / 本地 memory / MDL 直读）
+- [x] Pi 多工具编排（M1/M2）：三工具经 internal API 回调 Python 治理边界；SSE token 级流式；事件契约 ajv 校验；会话存储 PG/JSONL 切换
+- [x] 知识图谱：PG18 + AGE 1.7.0 生产镜像、关系表 → 图装载器、`/api/graph/*` + Neo4j 风格可视化
+- [x] 传统查询：契约/保全/理赔多条件组合 + 详情 + CSV 导出 + 出口脱敏（身份证/手机号）
+- [x] 自定义 Agent 平台：注册/加密/审计/池监控 + "从数据库导入"内省生成工程 JSON
+- [x] 效果评测：30 条中文 NL→SQL 回归集 + golden SQL dry_plan 回归
+
+### 部署
+- [x] 生产五容器编排（`docker-compose.prod.yml`）：postgres（AGE）/ redis / backend / web / pi-orchestrator，健康检查 + mem_limit
+- [x] 小内存（1.6G）部署验证：镜像瘦身（多阶段 + CPU-only + 跳过 LLVM）、`WREN_MEMORY_ENABLED=false`、镜像 save/load 流水线（服务器零构建）
+- [x] 生产已上线并经外网验证（登录、问数、传统查询、图谱、流式）
 
 ## 待处理（建议顺序）
 
-### P1 — 上线前必做
-- [ ] 身份认证与授权（API key / JWT / RBAC），目前 chat 路由完全开放
-- [~] SQL 执行硬约束：数据库层只读事务（`default_transaction_read_only`）+ 语句超时 + 行数上限已落地；行级/列级数据权限待做
-- [x] 会话记忆持久化（基于开源 Pi jsonl 落盘，`data/sessions/`；Redis/多实例共享可后续替换）
-- [~] 审计日志落库：自定义 Agent 管理操作已写入 `sys_operation_log`（注册/更新/启停/注销）；AI 问答/传统查询审计待接
-- [~] LLM 流式输出：执行事件 SSE 已完成（`/chat/stream`）；LLM 摘要 token 级流式待做
-- [ ] API 与 Web 的 Dockerfile + compose 编排（当前只有依赖服务）
-- [ ] 错误追踪（Sentry 或 OpenTelemetry 导出）
+### P1 — 上线加固
+- [ ] 服务器凭据轮换：root 密码、面板/AK 等已在聊天中明文暴露的凭据全部更换
+- [ ] SSH 关闭密码认证改密钥登录；服务器交接文档
+- [ ] pg_dump 定时备份（cron + 异地/对象存储），并演练一次恢复
+- [ ] 服务器环境跑一轮 30 条评测回归（验证生产检索/LLM 链路质量基线）
 
 ### P2 — 可观测性与性能
-- [ ] 指标端点（`/metrics`，Prometheus）：请求数、延迟、工具成功率
-- [ ] 分布式追踪（OpenTelemetry + Jaeger）
-- [ ] 限流与熔断（Rate limit per key）
-- [ ] 混合路由提速：常见问题走规则快路径（<1s），仅新问题走 LLM（当前单问 20–50s）
-- [ ] 数据库迁移工具（当前依赖容器初始化脚本）
-- [ ] 缓存层（Redis 缓存指标定义与 SQL 生成结果）
+- [ ] Prometheus `/metrics`：后端已有 metrics 模块，补编排层（工具成功率/时长/护栏触发）与统一采集
+- [ ] 错误追踪（Sentry 或 OpenTelemetry 导出）
+- [ ] 混合路由提速：常见问题快路径（<1s），仅新问题走 Agent 循环
+- [ ] Redis 落地使用（当前预留未启用）：限流共享态 / 会话列表缓存 / 语义检索结果缓存
+- [ ] 数据库迁移工具（当前依赖 init 脚本 + 手工 SQL）
 
 ### P3 — 平台化
-- [x] Agent 注册/发现中心：`/api/admin/agents` 自定义 Agent 注册（MDL + 连接串 + ownerId 多租户 + 连接池监控 + 审计，见 `docs/custom-agent-design.md`）；工作流引擎（多步编排、审批流）待做
-- [ ] 指标定义管理界面（语义模型 CRUD）
-- [ ] 多数据源连接器（BigQuery、Snowflake 等）
-- [~] 多租户：`owner_id` 归属与过滤已完成（基础版）；行级/列级细粒度数据权限与 owner 身份校验待做（当前 owner 由请求方声明）
-- [x] 开源 Pi 会话层接入（SSE 流式 + 会话持久化，已落地，见 `docs/pi-integration-assessment.md`）
+- [ ] M4 文档问答：doc_search RAG 工具接入 Pi 编排（文档向量化 + internal 检索端点）
+- [ ] Pi 多副本 + 负载均衡（会话已 PG 共享，缺前置 LB 与副本编排）
+- [ ] Pi 会话重命名/归档（当前仅新建/删除/搜索）
+- [ ] 列级数据权限与敏感字段分级（当前行级已完成）
+- [ ] 多数据源连接器（自定义 Agent 已支持任意 PG 连接串；BigQuery/Snowflake 等待做）
 
 ## 架构决策记录
 
-- **mock LLM = 离线模式**：`LLM_PROVIDER=mock` 时不注入 LLM，由确定性分析器产出回答，保证 demo 零外部依赖；配置真实 Provider 后自动启用 LLM 动态 SQL 生成 + 摘要。
-- **LLM 生成 SQL 的安全边界**：生成层强制只读/防注入/表名白名单，失败自动降级规则引擎；数据库执行层加固列入 P1。
-- **`services/api` 已合并至 `apps/api`**：消除重复的 API 入口，统一为唯一 API 服务。
-- **packages 以源码形式被 workspace 消费**（`main` 指向 `src/index.ts`），dev 用 tsx、生产构建由 API 的 tsup 打包、Web 由 Next transpilePackages 处理。
-- **`.env` 位于仓库根**：API 通过 dotenv 自动加载（cwd 或仓库根），已被 gitignore，密钥不进入 Git。
-- **开源 Pi 仅作会话层接入（不替换流水线）**：`pi-agent-core` 嵌入 Spike 已跑通（DashScope 兼容 provider + 自定义工具 + 多轮会话），但 LLM 自由循环不可控，现有确定性 SQL 流水线保持不变；Pi 只用于会话持久化/事件流，详见 `docs/pi-integration-assessment.md`。
+- **Pi 编排层独立 Node sidecar（方案 A）**：Agent 循环在 Node（pi-agent-core 0.83.0），治理边界全部留在 Python 后端——工具只能经 internal API 回调，模型接触不到裸 SQL/裸连接串。锁死 0.83.0，升级需跑编排层 51 用例 + E2E。
+- **语义层唯一源是 WrenAI 原生工程**：检索/校验/白名单均从 `semantic/wren/target/mdl.json` 派生；远程 embedding 只是检索加速，降级链最终兜底 MDL 直读。
+- **机构权限在 SQL AST 层强制而非提示词层**：org 模式下 sqlglot 改写/校验 + 传统查询/图谱各自覆盖，提示词只是辅助。
+- **生产部署禁服务器构建**：1.6G 内存 ECS 上构建会 IO 卡死；统一本地构建 → save/gzip → 上传 → load → `up -d`。
+- **`.env` 位于仓库根**：后端/编排层共用，已 gitignore，密钥不进 Git。

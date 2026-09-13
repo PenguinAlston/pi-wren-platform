@@ -1,68 +1,53 @@
 # MVP 进展
 
-> 状态：2026-08-02 更新。MVP 已从"骨架"演进为**可运行的自然语言数据问答平台 + 自助式自定义 Agent 平台**，全链路已用真实 LLM（阿里云 DashScope qwen3.7-flash）与真实 PostgreSQL 验证通过。企业级演进清单见 [enterprise-roadmap.md](enterprise-roadmap.md)。
+> 状态：2026-09-13 更新。平台已完成从单一问数 MVP 到 **Pi 多工具编排 + 机构行级权限 + 知识图谱 + 生产部署** 的演进，生产环境（1.6G 内存 ECS）五容器稳定运行并经外网验证。企业级演进清单见 [enterprise-roadmap.md](enterprise-roadmap.md)，架构图见 `docs/architecture-overview.png` 与 `docs/technical-architecture.png`。
 
-## 已完成
+> 早期（2026-08）TypeScript/Express 单体阶段的里程碑记录已随架构迁移完成使命，详见 Git 历史（`fix: drop ts backend, unify on python` 前后）。
 
-### 核心链路（已跑通）
-- [x] 中文自然语言 → LLM 动态生成 SQL → 安全校验 → PostgreSQL 执行 → 业务分析摘要
-- [x] 保险 Agent（保单/理赔/保全/核保/赔付率，22 张生产级表 + 字典中文标签）
-- [x] 财务 Agent 已下线（平台当前仅保留保险综合查询；`financeDomain`/`finance.mdl.yml` 保留供测试与按需恢复）
-- [x] 规则引擎降级兜底（LLM 不可用或输出不安全时自动切换，查询不中断）
-- [x] 防幻觉提示词（日期/数值逐字照抄，数据缺失如实说明）
-- [x] SQL 安全校验（统一关口 `database_query`：字符串/注释防绕过、危险函数拦截、表名白名单自动来自 MDL；LLM/规则/Wren/自定义 Agent 全路径生效）
+## 已完成（按里程碑）
 
-### 会话与流式（方案 A：开源 Pi 会话层）
-- [x] 多轮会话持久化：基于 `@earendil-works/pi-agent-core` jsonl 会话仓库（`data/sessions/`，重启不丢）
-- [x] 续聊历史注入：摘要时自动注入最近 3 轮对话
-- [x] SSE 流式输出：`POST /api/agent/:domain/chat/stream`，前端实时轨迹
-- [x] 压缩决策辅助（pi `shouldCompact`/`estimateTokens`）
+### 语义层与问数流水线（底座）
+- [x] WrenAI 原生语义工程（`semantic/wren/`，MDL schema v5）作为唯一语义源；Python 后端进程内引擎 + dry-run 校验 + 表名白名单二次校验
+- [x] 语义检索三级降级：远程 embedding（OpenAI 兼容 `/embeddings`，小内存部署默认）→ 本地 WrenMemory → MDL 直读；`WREN_MEMORY_ENABLED` 可关
+- [x] LLM 防幻觉摘要、多轮历史注入、token 级 SSE 流式（`answer_delta`）
+- [x] NL→SQL 评测回归集（30 条中文保险案例）+ golden SQL dry_plan 回归（wrenai 升级防护）
 
-### 自定义 Agent（Phase 1-3）
-- [x] 自助注册：`POST /api/admin/agents`（MDL + 数据库连接串），无需改代码/重启
-- [x] 连接串 AES-256-GCM 加密落库、管理面 `X-Admin-Token` 鉴权、列表脱敏
-- [x] 运行时注册表：启动加载 + 动态增删改 + 单 Agent 失败隔离（status=error）
-- [x] 多租户：`owner_id` 归属 + 列表 `?ownerId=` 过滤
-- [x] 管理操作审计落库（`sys_operation_log`，主体 UADMIN，失败不阻断）
-- [x] 连接池监控：`GET /api/admin/agents/:id/status`（total/idle/waiting），更新/注销自动释放
-- [x] 前端管理页 `/agents`：MDL 粘贴、校验、连接测试、启停/编辑/删除、池监控
-- [x] 示例模板 `examples/mdl-template.yml`
+### Pi 多工具编排（M1-M2，`services/pi-orchestrator`）
+- [x] Node sidecar：Pi Agent 循环 + 三个受控工具（ask_data / traditional_query / graph_query），工具经 internal API 带用户身份回调 Python 后端
+- [x] 护栏：单轮工具 ≤8 次、175s 总时长、120s 工具超时、180s SSE 上限，失败/超时差异化兜底文案
+- [x] SSE 事件协议（plan/tool_call/tool_result/observation/answer_delta/done）+ `protocol/events.schema.json` ajv 契约校验
+- [x] 会话存储 PG（`pi_session_turn`，多副本共享）/ JSONL 可切换；后端代理熔断 + 健康探测自动恢复
 
-### 平台能力
-- [x] 多 Agent 架构：`DataAnalysisAgent` + 领域配置（内置 domain + 自定义 MDL 两种来源）
-- [x] MDL 式语义引擎（模型/意图/指标/知识，YAML 配置驱动）
-- [x] 前端控制台：Agent 切换、执行轨迹、SQL、结果表、多轮续聊
-- [x] AI 问答页 chat.qwen.ai 化（需求第 4 章）：左侧会话栏（新建/搜索/删除/重命名）、中间对话区（加载动画/历史回看/内容复制）、底部输入区（超长文本/清空会话）、错误重试；AI 回复含智能总结 + 自动图表（柱/折线/饼）+ 分页表格 + CSV 导出；会话管理 API `/api/sessions`；多轮 SQL 生成注入会话历史（延续维度/指代消解）
-- [x] API：`/api/agents`、`/api/agent/:domain/chat`、SSE 流式、自定义 Agent 管理面、健康检查
-- [x] 传统查询后端（需求第 3 章）：契约/保全/理赔多条件组合查询 + 详情 + CSV 导出 + 字典/机构联动（`/api/traditional/*`、`/api/dicts`、`/api/orgs`），出口统一脱敏（身份证/手机号）
-- [x] 传统查询前端（`/query`）：顶部导航【传统查询】【AI 问答】+ 左侧模块切换 + 条件区（录入/下拉/日期/数值区间）+ 结果区（分页/排序/详情抽屉/导出）
-- [x] 工程化：pnpm workspace、strict TS、ESLint/Prettier、Vitest 92 用例、CI、pino 日志（敏感头脱敏）、zod 配置
-- [x] 生产构建：tsup CJS 单文件（修复 pg/yaml 等原生 CJS 依赖在 ESM bundle 的运行时错误）
+### 机构行级权限与认证
+- [x] 登录鉴权（会话 + token）、用户管理页、会话归属隔离
+- [x] OrgAccess 三态（admin/org/deny）：问数 SQL AST 级强制（sqlglot）、传统查询机构覆盖、图谱 BFS 子图过滤，internal 链路同样生效
 
-## 目标流程（已实现）
+### 知识图谱（Apache AGE）
+- [x] PG18 + AGE 1.7.0 生产镜像；业务关系表 → 图谱装载（bind 协议装载器，46 节点/81 关系）
+- [x] `/api/graph/overview|neighbors|stats` + 前端 `/graph` Neo4j Browser 风格力导向可视化（详情卡/下钻/图例过滤/缩放）
+
+### 前端体验（M3 + 视觉打磨）
+- [x] 对话式首页（Pi 优先，功能面板按角色），经典问数降级为 `/chat`
+- [x] Material 3 设计系统（#19b49d 主题、自研 UI 组件库）、移动端适配、消息动作图标化、点赞/点踩反馈与后台查看
+
+### 部署与工程化
+- [x] 生产五容器编排（postgres-AGE / redis / backend / web / pi-orchestrator），小内存镜像瘦身（9.66G → 1.29G，运行 ~134MB）
+- [x] 部署流水线：本地构建 → save/gzip → 上传 → load → `up -d`（服务器禁止构建，防 IO 卡死）
+- [x] CI 三 job：frontend / backend（含 golden SQL）/ pi-orchestrator（51 用例）
+
+## 当前架构（一图流）
 
 ```
-用户中文提问
- │
-Web Chat（:3000）→ Express API（:8080）
- │
-DataAnalysisAgent（内置 保险 + 自定义 Agent 注册表）
- │
-语义层（LLM 动态 SQL / 规则引擎兜底）→ 安全校验（表名白名单）
- │
-PostgreSQL（内置 23 张表 + 自定义 Agent 独立连接池）
- │
-结果分析 → LLM 摘要（历史注入）→ SSE 实时轨迹 + 回答 + SQL + 结果表
- │
-会话 jsonl 持久化（pi）+ 管理操作审计（sys_operation_log）
+浏览器 ─ Next.js :3000 ─ FastAPI :18080 ── Pi sidecar :8090（Agent 循环 + 工具护栏）
+              │                │  └─ WrenAI 语义层（检索/校验）+ LLM + org_scope
+              │                └─ internal API（工具回调：问数/清单/图谱）
+              └──────── PostgreSQL（AGE 图谱 + 业务表 + Pi 会话）+ DashScope（LLM/embedding）
 ```
 
 ## 遗留项（详见路线图）
 
-- 认证/RBAC（当前管理面用轻量 `X-Admin-Token`）
-- AI 问答/传统查询的审计接入（当前仅自定义 Agent 管理操作）
-- 行级/列级数据权限（只读事务/语句超时/行数上限已完成）
-- 传统业务查询前端页面（后端 API 已完成；前端三张查询页已完成：模块切换/条件组合/分页排序/详情抽屉/CSV 导出）
-- AI 会话权限隔离（当前无认证，会话全局可见）、会话数据入库 `ai_chat_session`（当前 jsonl 落盘）
-- 混合路由提速（常见问题 <1s）、LLM 摘要 token 级流式、生产部署（Dockerfile）
-- 多轮语义：规则引擎省略式追问已可沿用上一轮意图；维度延续（如按渠道分组后追问「保费」）由 LLM 历史注入解决，规则兜底暂不切换维度
+- 上线加固：服务器 root 密码/凭据轮换（已在聊天中暴露）、关闭 SSH 密码认证改密钥、pg_dump 定时备份
+- 可观测性：Prometheus `/metrics` 采集编排层与后端指标、错误追踪（Sentry/OTel）
+- M4：文档问答（doc_search RAG 工具）、Pi 多副本 + 负载均衡
+- Pi 会话重命名；Redis 预留未启用（可做限流/缓存落地）
+- 服务器环境跑一轮 30 条评测回归（当前仅在本地验证过）

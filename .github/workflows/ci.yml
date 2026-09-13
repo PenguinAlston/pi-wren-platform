@@ -75,3 +75,25 @@ jobs:
       - name: Test
         run: pytest
         working-directory: backend
+
+  pi-orchestrator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: services/pi-orchestrator/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: services/pi-orchestrator
+
+      - name: Test
+        run: npm test
+        working-directory: services/pi-orchestrator

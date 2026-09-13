@@ -3,7 +3,23 @@
 > 评估日期：2026-08 · 目标：判断能否将 MIT 开源 Agent 工具集
 > [`earendil-works/pi`](https://github.com/earendil-works/pi)（pi-ai / pi-agent-core）嵌入本平台。
 
-## 状态：方案 A 已落地（2026-08）
+## 状态更新（2026-09）：已升级为完整编排层（方案 B 落地）
+
+本文写作时的结论是"仅会话层接入（方案 A）"。随后平台按 **方案 A → 独立 sidecar → 完整 Agent 循环**
+三步演进，当前现状：
+
+- **`services/pi-orchestrator`（Node 22 sidecar）** 承担对话式首页与 `/chat` Pi 模式的编排：
+  Agent 循环 + 三个受控工具（ask_data / traditional_query / graph_query），工具经后端
+  internal API（`x-internal-token` + `x-user-id`）回调 Python 治理边界——模型接触不到裸 SQL/连接串
+- **当时评估的风险已有对应工程解**：
+  - 自由循环不可控 → 护栏（工具 ≤8 次/轮、175s 总时长、120s 工具超时、SSE 180s 上限）+ 失败兜底
+  - SQL 安全 → 工具唯一入口即 Python 侧校验/白名单/机构行级权限，边界不变
+  - 0.x API 不稳定 → 锁死 0.83.0，51 个 Vitest 用例 + CI job 防回归
+  - 依赖体积 → 仅 sidecar 引入（不进 Web bundle），生产镜像按需裁剪
+- 会话存储 PG（多副本共享）/ JSONL 可切换；事件协议契约化（`protocol/events.schema.json` + ajv）
+- 历史内容（Spike 验证、provider 配置、方案对比）保留如下，供升级 Pi 版本时对照
+
+## 状态：方案 A 已落地（2026-08，已被上节取代）
 
 Spike 通过后已完成**会话层接入**（提交见 Git 历史）：
 
